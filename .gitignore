@@ -1,0 +1,15 @@
+__pycache__/
+.ipynb_checkpoints/
+checkpoints/
+data/
+lightning_logs/
+logs/
+submission_files/
+test_neural_responses/
+test_neural_responses/
+
+*.ckpt
+*.png
+*.npy
+*.pth
+*.csv
