@@ -20,7 +20,7 @@ random.seed(1)
 def plot_weight_histo(weights, name, prj_name):
 
     ##########################
-    job_dir = os.path.join("/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/visualize_neural_plots", prj_name)
+    job_dir = os.path.join("/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/visualize_weight_plots", prj_name)
     os.makedirs(job_dir, exist_ok=True)
 
     ##########################
@@ -41,7 +41,7 @@ def plot_weight_histo(weights, name, prj_name):
 def visualize_neural_plots(preds, targets, prj_name):
 
     ##########################
-    job_dir = os.path.join("/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/visualize_neural_plots", prj_name)
+    job_dir = os.path.join("/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/visualize_neural_plots", prj_name)
     os.makedirs(job_dir, exist_ok=True)
 
     ##########################

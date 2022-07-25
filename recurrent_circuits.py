@@ -10,6 +10,21 @@ from torch.autograd import Function
 
 from torchvision import datasets, models, transforms
 
+from nnfabrik.utility.nn_helpers import set_random_seed, get_dims_for_loader_dict
+
+from neuralpredictors.layers.encoders import FiringRateEncoder
+from neuralpredictors.layers.shifters import MLPShifter, StaticAffine2dShifter
+from neuralpredictors.layers.cores import (
+    Stacked2dCore,
+    SE2dCore,
+    RotationEquivariant2dCore,
+)
+
+import warnings
+warnings.filterwarnings('ignore')
+
+from HMAX_V1_FF import HMAX
+
 # Seeds
 import random
 random.seed(1)
@@ -186,8 +201,8 @@ class hConvGRUCell(nn.Module):
         self.w = nn.Parameter(torch.empty((hidden_size, 1, 1)))
 
         if self.batchnorm_bool:
-            # self.bn = nn.ModuleList([nn.BatchNorm2d(hidden_size, eps=1e-03) for i in range(self.timesteps*2)])
-            self.bn = nn.ModuleList([nn.BatchNorm2d(hidden_size, eps=1e-03) for i in range(2)])
+            self.bn = nn.ModuleList([nn.BatchNorm2d(hidden_size, eps=1e-03) for i in range(self.timesteps*2)])
+            # self.bn = nn.ModuleList([nn.BatchNorm2d(hidden_size, eps=1e-03) for i in range(2)])
             # self.bn = nn.ModuleList([nn.BatchNorm2d(hidden_size, eps=1e-03, track_running_stats = False) for i in range(2)])
             for bn in self.bn:
                 init.constant_(bn.weight, 0.1)
@@ -284,69 +299,6 @@ class hConvGRUCell(nn.Module):
 
     def forward(self, t_i, input_, inhibition, excitation,  activ=F.softplus, testmode=False):  # Worked with tanh and softplus
 
-        if self.noneg_constraint and not(self.batchnorm_bool):
-                # print('new_sigmoid')
-                activ = noneg_sigmoid
-
-        # Attention gate: filter input_ and excitation
-        if self.use_attention:
-            print('Nooooooooooooooooo')
-            att_gate = torch.sigmoid(self.a_w_gate(input_) + self.a_u_gate(excitation))  # Attention Spotlight -- MOST RECENT WORKING
-
-        # Gate E/I with attention immediately
-        if self.use_attention:
-            print('Nooooooooooooooooo')
-            gated_input = input_  # * att_gate  # In activ range
-            gated_excitation = att_gate * excitation  # att_gate * excitation
-        else:
-            gated_input = input_
-            gated_excitation = excitation
-        gated_inhibition = inhibition
-
-        if not self.no_inh:
-            # Compute inhibition
-            if self.batchnorm_bool:
-                inh_intx = self.bn[0](F.conv2d(gated_excitation, self.w_inh, padding=self.h_padding))  # in activ range
-            else:
-                inh_intx = F.conv2d(gated_excitation, self.w_inh, padding=self.h_padding)  # in activ range
-            inhibition_hat = activ(input_ - activ(inh_intx * (self.alpha * gated_inhibition + self.mu)))
-
-            # Integrate inhibition
-            if self.noneg_constraint:
-                inh_gate = activ(self.i_w_gate(gated_input) + self.i_u_gate(gated_inhibition))
-            else:
-                inh_gate = torch.sigmoid(self.i_w_gate(gated_input) + self.i_u_gate(gated_inhibition))
-            inhibition = (1 - inh_gate) * inhibition + inh_gate * inhibition_hat  # In activ range
-        else:
-            inhibition, gated_inhibition = gated_excitation, excitation
-
-        # Pass to excitatory neurons
-        if self.noneg_constraint:
-            exc_gate = activ(self.e_w_gate(gated_inhibition) + self.e_u_gate(gated_excitation))
-        else:
-            exc_gate = torch.sigmoid(self.e_w_gate(gated_inhibition) + self.e_u_gate(gated_excitation))
-        if self.batchnorm_bool:
-            exc_intx = self.bn[1](F.conv2d(inhibition, self.w_exc, padding=self.h_padding))  # In activ range
-        else:
-            exc_intx = F.conv2d(inhibition, self.w_exc, padding=self.h_padding)  # In activ range
-        # excitation_hat = activ(exc_intx * (self.kappa * inhibition + self.gamma))  # Skip connection OR add OR add by self-sim
-        excitation_hat = activ(inhibition + exc_intx * (self.kappa * inhibition + self.gamma))  # Skip connection OR add OR add by self-sim
-
-        excitation = (1 - exc_gate) * excitation + exc_gate * excitation_hat
-
-        
-        ##################################################################
-        ################## Noting the weights to check ###################
-        ##################################################################
-        weights_to_check = {'w_exc' : self.w_exc.clone(), 'w_inh' : self.w_inh.clone(), 'kappa' : self.kappa.clone(), 'gamma' : self.gamma.clone(), \
-                            'mu' : self.mu.clone(), 'alpha' : self.alpha.clone(), 'i_w_gate' : self.i_w_gate.weight.clone(), 'i_u_gate' : self.i_u_gate.weight.clone(), \
-                            'e_w_gate' : self.e_w_gate.weight.clone(), 'e_u_gate' : self.e_u_gate.weight.clone()}
-        
-        if testmode:
-            return inhibition, excitation, att_gate, weights_to_check
-        else:
-            return inhibition, excitation, weights_to_check
-
         # if self.noneg_constraint and not(self.batchnorm_bool):
         #         # print('new_sigmoid')
         #         activ = noneg_sigmoid
@@ -369,7 +321,7 @@ class hConvGRUCell(nn.Module):
         # if not self.no_inh:
         #     # Compute inhibition
         #     if self.batchnorm_bool:
-        #         inh_intx = self.bn[t_i*2 + 0](F.conv2d(gated_excitation, self.w_inh, padding=self.h_padding))  # in activ range
+        #         inh_intx = self.bn[0](F.conv2d(gated_excitation, self.w_inh, padding=self.h_padding))  # in activ range
         #     else:
         #         inh_intx = F.conv2d(gated_excitation, self.w_inh, padding=self.h_padding)  # in activ range
         #     inhibition_hat = activ(input_ - activ(inh_intx * (self.alpha * gated_inhibition + self.mu)))
@@ -389,7 +341,7 @@ class hConvGRUCell(nn.Module):
         # else:
         #     exc_gate = torch.sigmoid(self.e_w_gate(gated_inhibition) + self.e_u_gate(gated_excitation))
         # if self.batchnorm_bool:
-        #     exc_intx = self.bn[t_i*2 + 1](F.conv2d(inhibition, self.w_exc, padding=self.h_padding))  # In activ range
+        #     exc_intx = self.bn[1](F.conv2d(inhibition, self.w_exc, padding=self.h_padding))  # In activ range
         # else:
         #     exc_intx = F.conv2d(inhibition, self.w_exc, padding=self.h_padding)  # In activ range
         # # excitation_hat = activ(exc_intx * (self.kappa * inhibition + self.gamma))  # Skip connection OR add OR add by self-sim
@@ -410,6 +362,75 @@ class hConvGRUCell(nn.Module):
         # else:
         #     return inhibition, excitation, weights_to_check
 
+        ##################################################################
+        ##################################################################
+        ##################################################################
+
+        if self.noneg_constraint: # and not(self.batchnorm_bool):
+                # print('new_sigmoid')
+                activ_sig = noneg_sigmoid
+                # activ_sig = activ
+
+        # Attention gate: filter input_ and excitation
+        if self.use_attention:
+            print('Nooooooooooooooooo')
+            att_gate = torch.sigmoid(self.a_w_gate(input_) + self.a_u_gate(excitation))  # Attention Spotlight -- MOST RECENT WORKING
+
+        # Gate E/I with attention immediately
+        if self.use_attention:
+            print('Nooooooooooooooooo')
+            gated_input = input_  # * att_gate  # In activ range
+            gated_excitation = att_gate * excitation  # att_gate * excitation
+        else:
+            gated_input = input_
+            gated_excitation = excitation
+        gated_inhibition = inhibition
+
+        if not self.no_inh:
+            # Compute inhibition
+            if self.batchnorm_bool:
+                inh_intx = self.bn[t_i*2 + 0](F.conv2d(gated_excitation, self.w_inh, padding=self.h_padding))  # in activ range
+            else:
+                inh_intx = F.conv2d(gated_excitation, self.w_inh, padding=self.h_padding)  # in activ range
+            inhibition_hat = activ(input_ - activ(inh_intx * (self.alpha * gated_inhibition + self.mu)))
+
+            # Integrate inhibition
+            if self.noneg_constraint:
+                inh_gate = activ_sig(self.i_w_gate(gated_input) + self.i_u_gate(gated_inhibition))
+            else:
+                inh_gate = torch.sigmoid(self.i_w_gate(gated_input) + self.i_u_gate(gated_inhibition))
+            inhibition = (1 - inh_gate) * inhibition + inh_gate * inhibition_hat  # In activ range
+        else:
+            inhibition, gated_inhibition = gated_excitation, excitation
+
+        # Pass to excitatory neurons
+        if self.noneg_constraint:
+            exc_gate = activ_sig(self.e_w_gate(gated_inhibition) + self.e_u_gate(gated_excitation))
+        else:
+            exc_gate = torch.sigmoid(self.e_w_gate(gated_inhibition) + self.e_u_gate(gated_excitation))
+        if self.batchnorm_bool:
+            exc_intx = self.bn[t_i*2 + 1](F.conv2d(inhibition, self.w_exc, padding=self.h_padding))  # In activ range
+        else:
+            exc_intx = F.conv2d(inhibition, self.w_exc, padding=self.h_padding)  # In activ range
+        # excitation_hat = activ(exc_intx * (self.kappa * inhibition + self.gamma))  # Skip connection OR add OR add by self-sim
+        # excitation_hat = activ(inhibition + exc_intx * (self.kappa * inhibition + self.gamma))  # Skip connection OR add OR add by self-sim
+        excitation_hat = activ(inhibition + activ(exc_intx * (self.kappa * inhibition + self.gamma))) # Skip connection OR add OR add by self-sim
+
+        excitation = (1 - exc_gate) * excitation + exc_gate * excitation_hat
+
+        
+        ##################################################################
+        ################## Noting the weights to check ###################
+        ##################################################################
+        weights_to_check = {'w_exc' : self.w_exc.clone(), 'w_inh' : self.w_inh.clone(), 'kappa' : self.kappa.clone(), 'gamma' : self.gamma.clone(), \
+                            'mu' : self.mu.clone(), 'alpha' : self.alpha.clone(), 'i_w_gate' : self.i_w_gate.weight.clone(), 'i_u_gate' : self.i_u_gate.weight.clone(), \
+                            'e_w_gate' : self.e_w_gate.weight.clone(), 'e_u_gate' : self.e_u_gate.weight.clone()}
+        
+        if testmode:
+            return inhibition, excitation, att_gate, weights_to_check
+        else:
+            return inhibition, excitation, weights_to_check
+
 
 
 class FFhGRU(nn.Module):
@@ -417,7 +438,9 @@ class FFhGRU(nn.Module):
     def __init__(self, dimensions = 25, input_size=3, timesteps=8, kernel_size=15, jacobian_penalty=False, grad_method='bptt', no_inh=False, \
                  lesion_alpha=False, lesion_mu=False, lesion_gamma=False, lesion_kappa=False, nl=F.softplus, l1=0., output_size=3, \
                  num_rbp_steps=10, LCP=0., jv_penalty_weight=0.002, pre_kernel_size = 7, VGG_bool = True, InT_bool = True, \
-                 batchnorm_bool = True, noneg_constraint = False, exp_weight = False, orthogonal_init = True, freeze_VGG = False):
+                 batchnorm_bool = True, noneg_constraint = False, exp_weight = False, orthogonal_init = True, freeze_VGG = False, \
+                 sensorium_ff_bool = False, dataloaders = None, HMAX_bool = False, simple_to_complex = False, \
+                 simple_to_complex_layer = None, n_ori = None, n_scales = None, simple_ff_bool = False):
         '''
         '''
         super(FFhGRU, self).__init__()
@@ -433,13 +456,45 @@ class FFhGRU(nn.Module):
         self.exp_weight = exp_weight
         self.orthogonal_init = orthogonal_init
         self.freeze_VGG = freeze_VGG
+        self.HMAX_bool = HMAX_bool
+        self.simple_to_complex = simple_to_complex
+        self.simple_to_complex_layer = simple_to_complex_layer
+        self.n_ori = n_ori
+        self.n_scales = n_scales
+        self.simple_ff_bool = simple_ff_bool
         self.LCP = LCP
         self.jv_penalty_weight = jv_penalty_weight
         if l1 > 0:
             self.preproc = L1(nn.Conv2d(input_size, dimensions, kernel_size=kernel_size, stride=1, padding=kernel_size // 2), weight_decay=l1)
-        elif not(VGG_bool):
-            self.preproc = nn.Conv2d(input_size, dimensions, kernel_size=pre_kernel_size, stride=1, padding=pre_kernel_size // 2)
-        else:
+        elif not(VGG_bool or sensorium_ff_bool or HMAX_bool or simple_ff_bool):
+            self.preproc = nn.Conv2d(1, dimensions, kernel_size=pre_kernel_size, stride=1, padding=pre_kernel_size // 2)
+        elif self.simple_ff_bool:
+            if self.simple_to_complex:
+                if self.simple_to_complex_layer == 'S1':
+                    conv0 = nn.Conv2d(1, 25, kernel_size=7, padding=7 // 2)
+                    part1 = np.load("/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/gabor_serre.npy")
+                    conv0.weight.data = torch.FloatTensor(part1)
+                    self.preproc = conv0
+                    self.hgru_size = 25
+                elif self.simple_to_complex_layer == 'C1':
+                    self.preproc = nn.Sequential(
+                                                nn.Conv2d(25, dimensions, kernel_size=pre_kernel_size, stride=1, padding=pre_kernel_size // 2),
+                                                # nn.Conv2d(dimensions, dimensions, kernel_size=pre_kernel_size, stride=1, padding=pre_kernel_size // 2),
+                                                nn.MaxPool2d(2, stride=1))
+        elif self.HMAX_bool:
+            if not self.simple_to_complex:
+                self.preproc = HMAX()
+            else:
+                if self.simple_to_complex_layer == 'S1':
+                    preproc = HMAX(n_ori = self.n_ori, n_scales = self.n_scales, s1_trainable_filters = True)
+                    self.preproc = preproc.s1
+                    self.hgru_size = self.n_ori * self.n_scales
+                elif self.simple_to_complex_layer == 'C1':
+                    preproc = HMAX(n_ori = self.n_ori, n_scales = self.n_scales, s1_trainable_filters = True)
+                    # self.before_preproc = nn.Conv2d(self.n_ori * self.n_scales, self.n_ori * self.n_scales, kernel_size=pre_kernel_size, stride=1, padding=pre_kernel_size // 2)
+                    self.preproc = preproc.c1
+                    self.hgru_size = self.n_ori * (self.n_scales-1)
+        elif VGG_bool:
             vgg_pretrained_features = models.vgg16(pretrained=True).features
             # vgg_pretrained_features = models.squeezenet1_1(pretrained=True).features
 
@@ -465,6 +520,66 @@ class FFhGRU(nn.Module):
                     param.requires_grad = False
                 
             self.preproc = preproc
+
+        elif sensorium_ff_bool:
+
+            session_shape_dict = get_dims_for_loader_dict(dataloaders)
+            input_channels = [v['images'][1] for v in session_shape_dict.values()]
+            core_input_channels = (
+                                    list(input_channels.values())[0]
+                                    if isinstance(input_channels, dict)
+                                    else input_channels[0]
+                                )
+
+            print('input_channels : ',input_channels)
+            print('core_input_channels : ',core_input_channels)
+
+            # Hyper-Parameters
+            hidden_channels=self.hgru_size
+            input_kern=9
+            hidden_kern=7
+            layers=4
+            gamma_input=6.3831
+            skip=0
+            final_nonlinearity=True
+            core_bias=False
+            momentum=0.9
+            pad_input=False
+            batch_norm=True
+            hidden_dilation=1
+            laplace_padding=None
+            input_regularizer="LaplaceL2norm"
+            stack=-1
+            depth_separable=True
+            linear=False
+            attention_conv=False
+            hidden_padding=None
+            use_avg_reg=False
+
+            core = Stacked2dCore(
+                    input_channels=core_input_channels,
+                    hidden_channels=hidden_channels,
+                    input_kern=input_kern,
+                    hidden_kern=hidden_kern,
+                    layers=layers,
+                    gamma_input=gamma_input,
+                    skip=skip,
+                    final_nonlinearity=final_nonlinearity,
+                    bias=core_bias,
+                    momentum=momentum,
+                    pad_input=pad_input,
+                    batch_norm=batch_norm,
+                    hidden_dilation=hidden_dilation,
+                    laplace_padding=laplace_padding,
+                    input_regularizer=input_regularizer,
+                    stack=stack,
+                    depth_separable=depth_separable,
+                    linear=linear,
+                    attention_conv=attention_conv,
+                    hidden_padding=hidden_padding,
+                    use_avg_reg=use_avg_reg,)
+
+            self.preproc = core
 
         # init.xavier_normal_(self.preproc.weight)
         # init.constant_(self.preproc.bias, 0)
@@ -507,7 +622,18 @@ class FFhGRU(nn.Module):
 
     def forward(self, x, testmode=False, give_timesteps = False):
         # First step: replicate x over the channel dim self.hgru_size times
-        xbn = self.preproc(x)
+        if self.simple_to_complex and self.HMAX_bool:
+            if self.simple_to_complex_layer == 'C1':
+                # x = self.before_preproc(x)
+                # Bx(C*S)xHxW ---> BxCxSxHxW ---> BxCxHxWxS 
+                x = x.reshape(x.shape[0], self.n_ori, self.n_scales, x.shape[2], x.shape[3])
+                x = x.permute(0,1,3,4,2)
+            # BxCxHxWxS ---> Bx(C*S)xHxW
+            xbn = self.preproc(x)
+            xbn = xbn.permute(0,1,4,2,3)
+            xbn = xbn.reshape(xbn.shape[0], -1, xbn.shape[3], xbn.shape[4])
+        else:
+            xbn = self.preproc(x)
         # Akash changed from batchnorm to batchnorm_bool
         if self.batchnorm_bool:
             xbn = self.dropout(xbn)
@@ -581,6 +707,8 @@ class FFhGRU(nn.Module):
             excitation = dummyhgru.apply(pen_exc, last_exc, self.num_rbp_steps)
         else:
             raise NotImplementedError(self.grad_method)
+
+        
 
         
 

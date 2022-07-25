@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --time=24:00:00
-#SBATCH -p gpu --gres=gpu:1
+#SBATCH -p gpu --gres=gpu:8
 #SBATCH -n 1
 #SBATCH -N 1
 #SBATCH --mem=80GB
@@ -9,7 +9,7 @@
 ##SBATCH --constraint=v100
 #SBATCH -o /cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/logs/akash_MI_%A_%a_%J.out
 #SBATCH -e /cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/logs/akash_MI_%A_%a_%J.err
-##SBATCH --account=carney-tserre-condo
+#SBATCH --account=carney-tserre-condo
 ##SBATCH --array=0-1
 
 

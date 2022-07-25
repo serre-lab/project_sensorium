@@ -15,7 +15,7 @@ from nnfabrik.builder import get_data, get_model, get_trainer
 
 import os
 
-basepath = "/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/data/"
+basepath = "/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/"
 
 # as filenames, we'll select all 7 datasets
 filenames = [os.path.join(basepath, file) for file in os.listdir(basepath) if ".zip" in file ]
@@ -86,6 +86,6 @@ print('Trainer is ready to go')
 ########################################################################
 
 validation_score, trainer_output, state_dict = trainer(model, dataloaders, seed=42)
-torch.save(model.state_dict(), '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/checkpoints/generalization_model.pth')
+torch.save(model.state_dict(), '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/checkpoints/generalization_model.pth')
 
 ########################################################################

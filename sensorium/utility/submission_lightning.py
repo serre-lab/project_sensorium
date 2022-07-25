@@ -24,7 +24,7 @@ def model_predictions(model, trainer_lightning, data_lightning, prj_name, device
     trainer_lightning.test(model, data_lightning)
 
     # Saving
-    job_dir = os.path.join("/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/test_neural_responses", prj_name)
+    job_dir = os.path.join("/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/test_neural_responses", prj_name)
     os.makedirs(job_dir, exist_ok=True)
     file_name = os.path.join(job_dir, "neural_responses.npy")
 
