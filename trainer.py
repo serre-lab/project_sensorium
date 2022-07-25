@@ -176,7 +176,7 @@ if __name__ == '__main__':
                     simple_to_complex, n_ori, n_scales, simple_ff_bool)
 
     if test_mode or val_mode or continue_training:
-        model = model.load_from_checkpoint('/media/data_cifs/projects/prj_sensorium/arjun/checkpoints/' + prj_name + '/sensorium-epoch=26-val_corr=0.3265847861766815-val_loss=13657369.0.ckpt')
+        model = model.load_from_checkpoint('/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/checkpoints/' + prj_name + '/sensorium-epoch=26-val_corr=0.3265847861766815-val_loss=13657369.0.ckpt')
 
         print('Loaded Checkpoint')
 
@@ -218,7 +218,7 @@ if __name__ == '__main__':
     # Callbacks and Trainer
     checkpoint_callback = ModelCheckpoint(
                             monitor="val_corr",
-                            dirpath="/media/data_cifs/projects/prj_sensorium/arjun/checkpoints/" + prj_name,
+                            dirpath="/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/checkpoints/" + prj_name,
                             filename="sensorium-{epoch}-{val_corr}-{val_loss}",
                             save_top_k=8,
                             mode="max",
@@ -242,7 +242,7 @@ if __name__ == '__main__':
         data_key='26872-17-20'
         data.dataset_name = data_key
 
-        job_dir = os.path.join("/media/data_cifs/projects/prj_sensorium/arjun/submission_files", model.prj_name)
+        job_dir = os.path.join("/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/submission_files", model.prj_name)
         os.makedirs(job_dir, exist_ok=True)
 
         # generate the submission file

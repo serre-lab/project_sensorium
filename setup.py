@@ -196,7 +196,7 @@ class InT_Sensorium_Baseline_Direct(pl.LightningModule):
             self.recurrent_circuit = base_model
 
         else:
-            base_model = base_model.load_from_checkpoint('/media/data_cifs/projects/prj_sensorium/arjun/checkpoints/checkpoints_sensorium_sensorium_ff_InT_BN_track_all_sep_3t_7k_0003_GAP_6_datasets_gaussian_pre_training/sensorium-epoch=65-val_corr=0.32074299454689026-val_loss=13785238.0.ckpt').recurrent_circuit
+            base_model = base_model.load_from_checkpoint('/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/checkpoints/checkpoints_sensorium_sensorium_ff_InT_BN_track_all_sep_3t_7k_0003_GAP_6_datasets_gaussian_pre_training/sensorium-epoch=65-val_corr=0.32074299454689026-val_loss=13785238.0.ckpt').recurrent_circuit
             
             ##################### Freezing Weights ############################
             if self.base_freeze:
@@ -550,7 +550,7 @@ class InT_Sensorium_Baseline_Direct(pl.LightningModule):
         ###########################
         # Save pred_neural_resp
         self.test_neural_responses = torch.cat(self.test_neural_responses, dim = 0)
-        job_dir = os.path.join("/media/data_cifs/projects/prj_sensorium/arjun/test_neural_responses", self.prj_name)
+        job_dir = os.path.join("/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/test_neural_responses", self.prj_name)
         os.makedirs(job_dir, exist_ok=True)
         file_name = os.path.join(job_dir, "neural_responses.npy")
         np.save(file_name, self.test_neural_responses.numpy())
@@ -1144,7 +1144,7 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
         ###########################
         # Save pred_neural_resp
         self.test_neural_responses = torch.cat(self.test_neural_responses, dim = 0)
-        job_dir = os.path.join("/media/data_cifs/projects/prj_sensorium/arjun/test_neural_responses", self.prj_name)
+        job_dir = os.path.join("/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/test_neural_responses", self.prj_name)
         os.makedirs(job_dir, exist_ok=True)
         file_name = os.path.join(job_dir, "neural_responses.npy")
         np.save(file_name, self.test_neural_responses.numpy())
