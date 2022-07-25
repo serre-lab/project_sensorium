@@ -54,15 +54,24 @@ class sensorium_loader_direct(pl.LightningDataModule):
         
         # Sensorium dataloader
         if dataset_name == None:
-            self.filenames = ['/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static26872-17-20-GrayImageNet-94c6ff995dac583098847cfecd43e7b6']
+            # self.filenames = ['/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static26872-17-20-GrayImageNet-94c6ff995dac583098847cfecd43e7b6']
+            self.filenames = ['/media/data_cifs/projects/prj_sensorium/arjun/data/static26872-17-20-GrayImageNet-94c6ff995dac583098847cfecd43e7b6']
         else:
-            self.filenames = ['/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static21067-10-18-GrayImageNet-94c6ff995dac583098847cfecd43e7b6', 
-                            '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static22846-10-16-GrayImageNet-94c6ff995dac583098847cfecd43e7b6', 
-                            '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static23343-5-17-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
-                            '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static23656-14-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
-                            '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static23964-4-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
-                            '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static26872-17-20-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
-                            '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static27204-5-13-GrayImageNet-94c6ff995dac583098847cfecd43e7b6']
+            # self.filenames = ['/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static21067-10-18-GrayImageNet-94c6ff995dac583098847cfecd43e7b6', 
+            #                 '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static22846-10-16-GrayImageNet-94c6ff995dac583098847cfecd43e7b6', 
+            #                 '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static23343-5-17-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
+            #                 '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static23656-14-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
+            #                 '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static23964-4-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
+            #                 '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static26872-17-20-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
+            #                 '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static27204-5-13-GrayImageNet-94c6ff995dac583098847cfecd43e7b6']
+            
+            self.filenames = ['/media/data_cifs/projects/prj_sensorium/arjun/data/static21067-10-18-GrayImageNet-94c6ff995dac583098847cfecd43e7b6', 
+                            '/media/data_cifs/projects/prj_sensorium/arjun/data/static22846-10-16-GrayImageNet-94c6ff995dac583098847cfecd43e7b6', 
+                            '/media/data_cifs/projects/prj_sensorium/arjun/data/static23343-5-17-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
+                            '/media/data_cifs/projects/prj_sensorium/arjun/data/static23656-14-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
+                            '/media/data_cifs/projects/prj_sensorium/arjun/data/static23964-4-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
+                            '/media/data_cifs/projects/prj_sensorium/arjun/data/static26872-17-20-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
+                            '/media/data_cifs/projects/prj_sensorium/arjun/data/static27204-5-13-GrayImageNet-94c6ff995dac583098847cfecd43e7b6']
 
         self.dataset_fn = 'sensorium.datasets.static_loaders'
         # self.dataset_config = {'paths': self.filenames,
@@ -142,12 +151,19 @@ class sensorium_loader_pretrain(pl.LightningDataModule):
         self.batch_size_val = n_gpus*batch_size_per_gpu_val
         
         # Sensorium dataloader
-        self.filenames = ['/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static21067-10-18-GrayImageNet-94c6ff995dac583098847cfecd43e7b6', 
-            '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static22846-10-16-GrayImageNet-94c6ff995dac583098847cfecd43e7b6', 
-            '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static23343-5-17-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
-            '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static23656-14-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
-            '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static23964-4-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
-            '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static26872-17-20-GrayImageNet-94c6ff995dac583098847cfecd43e7b6']
+        # self.filenames = ['/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static21067-10-18-GrayImageNet-94c6ff995dac583098847cfecd43e7b6', 
+        #     '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static22846-10-16-GrayImageNet-94c6ff995dac583098847cfecd43e7b6', 
+        #     '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static23343-5-17-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
+        #     '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static23656-14-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
+        #     '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static23964-4-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
+        #     '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static26872-17-20-GrayImageNet-94c6ff995dac583098847cfecd43e7b6']
+
+        self.filenames = ['/media/data_cifs/projects/prj_sensorium/arjun/data/static21067-10-18-GrayImageNet-94c6ff995dac583098847cfecd43e7b6', 
+            '/media/data_cifs/projects/prj_sensorium/arjun/data/static22846-10-16-GrayImageNet-94c6ff995dac583098847cfecd43e7b6', 
+            '/media/data_cifs/projects/prj_sensorium/arjun/data/static23343-5-17-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
+            '/media/data_cifs/projects/prj_sensorium/arjun/data/static23656-14-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
+            '/media/data_cifs/projects/prj_sensorium/arjun/data/static23964-4-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
+            '/media/data_cifs/projects/prj_sensorium/arjun/data/static26872-17-20-GrayImageNet-94c6ff995dac583098847cfecd43e7b6']
 
         self.dataset_fn = 'sensorium.datasets.static_loaders'
         # self.dataset_config = {'paths': self.filenames,

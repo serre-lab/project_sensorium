@@ -1,3 +1,4 @@
+import sys
 import torch
 torch.manual_seed(1)
 import torch.nn as nn
@@ -46,10 +47,15 @@ from sensorium.utility import submission_lightning
 # os.environ["WANDB_API_KEY"] = api_key
 # wandb.init()
 
-
 # Seeds
 import random
 random.seed(1)
+
+import configparser
+
+# Get the username of the person running the job, this is used for parsing the config
+username = str(sys.argv[1])
+print("Using username:", username, "to run.")
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -72,62 +78,69 @@ if __name__ == '__main__':
 
     # base = pt_model.slice
 
+    config = configparser.ConfigParser()
+    config.read("experiment_configuration.cfg")
+
     # Mode
-    test_mode = False
-    val_mode = False
-    continue_training = False
+    test_mode = config[username].getboolean('test_mode')
+    val_mode = config[username].getboolean('val_mode')
+    continue_training = config[username].getboolean('continue_training')
     
-    # Training Method 
-    # if not(test_mode or val_mode):
-    direct_training = False
-    fine_tuning = False
-    base_freeze = False
+    # Training Method
+    direct_training = config[username].getboolean('direct_training')
+    fine_tuning = config[username].getboolean('fine_tuning')
+    base_freeze = config[username].getboolean('base_freeze')
     pre_training = not(direct_training)
 
     # Hyper-Parameters
-    prj_name = "checkpoints_sensorium_sensorium_ff_InT_BN_track_all_sep_3t_7k_0003_GAP_6_datasets_gaussian_extra_activ_exc_sum_05_noneg_no_noneg"
+    prj_name = config[username]['prj_name']
 
     if direct_training:
         prj_name = prj_name + "_direct_training" #+ "_continued_continued" #_continued"
         n_neurons = 7776
         batch_size_per_gpu = 32
         # lr = 0.01
-        lr = 0.001
 
         if fine_tuning:
             n_neurons_list = [8372, 7344, 7334, 8107, 8098, 7776]
     else:
         prj_name = prj_name + "_pre_training" #+ "_continued"
         n_neurons_list = [8372, 7344, 7334, 8107, 8098, 7776]
-        batch_size_per_gpu_train = 32
+        batch_size_per_gpu_train = 16
         batch_size_per_gpu_val = 128
-        # lr = 0.003
-        lr = 0.003 
 
-    weight_decay = 1e-4
-    hidden_size = 64
-    timesteps = 3
-    kernel_size = 7
-    pre_kernel_size = 7
-    num_epochs = 1500
+    lr = config['DEFAULT'].getfloat('lr')
 
-    VGG_bool = False
-    freeze_VGG = False
-    sensorium_ff_bool = not(VGG_bool)
+    weight_decay =  config[username].getfloat('weight_decay')
+    hidden_size =  config[username].getint('hidden_size')
+    timesteps = config[username].getint('timesteps')
+    kernel_size = config[username].getint('kernel_size')
+    pre_kernel_size = config[username].getint('pre_kernel_size')
+    num_epochs = config[username].getint('num_epochs')
 
-    InT_bool = True
-    batchnorm_bool = True
-    gaussian_bool = True
+    VGG_bool = config[username].getboolean('VGG_bool')
+    freeze_VGG = config[username].getboolean('freeze_VGG')
+    HMAX_bool = config[username].getboolean('HMAX_bool')
+    simple_ff_bool = config[username].getboolean('simple_ff_bool')
+    sensorium_ff_bool = not(VGG_bool or HMAX_bool or simple_ff_bool)
 
-    visualize_bool = False
+    n_ori = config[username].getint("n_ori")
+    n_scales = config[username].getint("n_scales")
 
-    orthogonal_init = False
-    exp_weight = True
-    noneg_constraint = True
-    clamp_weights = False
-    plot_weights = True
+    InT_bool = config[username].getboolean('InT_bool')
+    batchnorm_bool = config[username].getboolean('batchnorm_bool')
+    gaussian_bool = config[username].getboolean('gaussian_bool')
 
-    corr_loss = False
+    visualize_bool = config[username].getboolean('visualize_bool')
+
+    orthogonal_init = config[username].getboolean('orthogonal_init')
+    exp_weight = config[username].getboolean('exp_weight')
+    noneg_constraint = config[username].getboolean('noneg_constraint')
+    clamp_weights = config[username].getboolean('clamp_weights')
+    plot_weights = config[username].getboolean('plot_weights')
+
+    corr_loss = config[username].getboolean('corr_loss')
+    simple_to_complex = config[username].getboolean('simple_to_complex')
 
     # dataset_names = ['21067-10-18', '22846-10-16', '23343-5-17', '23656-14-22', '23964-4-22']
 
@@ -159,10 +172,11 @@ if __name__ == '__main__':
         model = InT_Sensorium_Baseline_Pretrain(prj_name, lr, weight_decay, n_neurons_list, hidden_size, timesteps, kernel_size, \
                     pre_kernel_size, VGG_bool, freeze_VGG, InT_bool, batchnorm_bool, orthogonal_init, \
                     exp_weight, noneg_constraint, visualize_bool, data.dataloaders_train["train"], \
-                    gaussian_bool, sensorium_ff_bool, clamp_weights, plot_weights, corr_loss)
+                    gaussian_bool, sensorium_ff_bool, clamp_weights, plot_weights, corr_loss, HMAX_bool, \
+                    simple_to_complex, n_ori, n_scales, simple_ff_bool)
 
     if test_mode or val_mode or continue_training:
-        model = model.load_from_checkpoint('/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/checkpoints/' + prj_name + '/sensorium-epoch=26-val_corr=0.3265847861766815-val_loss=13657369.0.ckpt')
+        model = model.load_from_checkpoint('/media/data_cifs/projects/prj_sensorium/arjun/checkpoints/' + prj_name + '/sensorium-epoch=26-val_corr=0.3265847861766815-val_loss=13657369.0.ckpt')
 
         print('Loaded Checkpoint')
 
@@ -171,9 +185,13 @@ if __name__ == '__main__':
         model.prj_name = prj_name + "_trained"
 
         model.lr = lr
+        model.n_ori = n_ori
+        model.n_scales = n_scales
         model.visualize_bool = visualize_bool
         model.fine_tuning = fine_tuning
         model.base_freeze = base_freeze
+        model.HMAX_bool = HMAX_bool
+        model.simple_to_complex = simple_to_complex
 
         model.gaussian_bool = gaussian_bool
         model.sensorium_ff_bool = sensorium_ff_bool
@@ -200,7 +218,7 @@ if __name__ == '__main__':
     # Callbacks and Trainer
     checkpoint_callback = ModelCheckpoint(
                             monitor="val_corr",
-                            dirpath="/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/checkpoints/" + prj_name,
+                            dirpath="/media/data_cifs/projects/prj_sensorium/arjun/checkpoints/" + prj_name,
                             filename="sensorium-{epoch}-{val_corr}-{val_loss}",
                             save_top_k=8,
                             mode="max",
@@ -224,7 +242,7 @@ if __name__ == '__main__':
         data_key='26872-17-20'
         data.dataset_name = data_key
 
-        job_dir = os.path.join("/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/submission_files", model.prj_name)
+        job_dir = os.path.join("/media/data_cifs/projects/prj_sensorium/arjun/submission_files", model.prj_name)
         os.makedirs(job_dir, exist_ok=True)
 
         # generate the submission file

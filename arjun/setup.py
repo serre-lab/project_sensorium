@@ -196,7 +196,7 @@ class InT_Sensorium_Baseline_Direct(pl.LightningModule):
             self.recurrent_circuit = base_model
 
         else:
-            base_model = base_model.load_from_checkpoint('/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/checkpoints/checkpoints_sensorium_sensorium_ff_InT_BN_track_all_sep_3t_7k_0003_GAP_6_datasets_gaussian_pre_training/sensorium-epoch=65-val_corr=0.32074299454689026-val_loss=13785238.0.ckpt').recurrent_circuit
+            base_model = base_model.load_from_checkpoint('/media/data_cifs/projects/prj_sensorium/arjun/checkpoints/checkpoints_sensorium_sensorium_ff_InT_BN_track_all_sep_3t_7k_0003_GAP_6_datasets_gaussian_pre_training/sensorium-epoch=65-val_corr=0.32074299454689026-val_loss=13785238.0.ckpt').recurrent_circuit
             
             ##################### Freezing Weights ############################
             if self.base_freeze:
@@ -550,7 +550,7 @@ class InT_Sensorium_Baseline_Direct(pl.LightningModule):
         ###########################
         # Save pred_neural_resp
         self.test_neural_responses = torch.cat(self.test_neural_responses, dim = 0)
-        job_dir = os.path.join("/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/test_neural_responses", self.prj_name)
+        job_dir = os.path.join("/media/data_cifs/projects/prj_sensorium/arjun/test_neural_responses", self.prj_name)
         os.makedirs(job_dir, exist_ok=True)
         file_name = os.path.join(job_dir, "neural_responses.npy")
         np.save(file_name, self.test_neural_responses.numpy())
@@ -588,7 +588,8 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
     def __init__(self, prj_name, lr, weight_decay, n_neurons_list, hidden_size, timesteps, kernel_size, \
                  pre_kernel_size, VGG_bool, freeze_VGG, InT_bool, batchnorm_bool, orthogonal_init, \
                  exp_weight, noneg_constraint, visualize_bool = False, dataloaders = None, gaussian_bool = False, \
-                 sensorium_ff_bool = False, clamp_weights = False, plot_weights = False, corr_loss = False):
+                 sensorium_ff_bool = False, clamp_weights = False, plot_weights = False, corr_loss = False, \
+                 HMAX_bool = False, simple_to_complex = False, n_ori = None, n_scales = None, simple_ff_bool = None):
         super().__init__()
         
         self.parameter_dict = {'prj_name':prj_name, 'lr':lr, 'weight_decay':weight_decay, 'n_neurons':n_neurons_list, \
@@ -596,7 +597,8 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
                                'VGG_bool':VGG_bool, 'freeze_VGG':freeze_VGG, 'InT_bool':InT_bool, 'batchnorm_bool':batchnorm_bool, \
                                'orthogonal_init':orthogonal_init, 'exp_weight':exp_weight, 'noneg_constraint':noneg_constraint, \
                                'visualize_bool':visualize_bool, 'gaussian_bool':gaussian_bool, 'sensorium_ff_bool':sensorium_ff_bool, \
-                               'clamp_weights':clamp_weights, 'plot_weights':plot_weights, 'corr_loss':corr_loss}
+                               'clamp_weights':clamp_weights, 'plot_weights':plot_weights, 'corr_loss':corr_loss, 'HMAX_bool':HMAX_bool, \
+                               'simple_to_complex' : simple_to_complex, 'n_ori':n_ori, 'n_scales':n_scales, 'simple_ff_bool':simple_ff_bool}
 
         print('self.parameter_dict : ',self.parameter_dict)
 
@@ -629,6 +631,9 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
         self.clamp_weights = clamp_weights
         self.plot_weights = plot_weights
         self.corr_loss = corr_loss
+        self.HMAX_bool = HMAX_bool
+        self.simple_to_complex = simple_to_complex
+        self.simple_ff_bool = simple_ff_bool
 
         if self.batchnorm_bool:
             # self.nl = F.softplus
@@ -644,13 +649,36 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
 
         print('Going to recurrent_circuit')
 
-        self.recurrent_circuit = FFhGRU(self.hidden_size, timesteps=self.timesteps, \
-                            kernel_size=self.kernel_size, nl=self.nl, input_size=3, \
-                            output_size=3, l1=0., pre_kernel_size=self.pre_kernel_size, \
-                            VGG_bool = self.VGG_bool, InT_bool = self.InT_bool, batchnorm_bool = self.batchnorm_bool, 
-                            noneg_constraint = self.noneg_constraint, exp_weight = self.exp_weight, \
-                            orthogonal_init = self.orthogonal_init, freeze_VGG = self.freeze_VGG, \
-                            sensorium_ff_bool = sensorium_ff_bool, dataloaders = self.dataloaders)
+        if not self.simple_to_complex:
+            self.recurrent_circuit = FFhGRU(self.hidden_size, timesteps=self.timesteps, \
+                                kernel_size=self.kernel_size, nl=self.nl, input_size=3, \
+                                output_size=3, l1=0., pre_kernel_size=self.pre_kernel_size, \
+                                VGG_bool = self.VGG_bool, InT_bool = self.InT_bool, batchnorm_bool = self.batchnorm_bool, 
+                                noneg_constraint = self.noneg_constraint, exp_weight = self.exp_weight, \
+                                orthogonal_init = self.orthogonal_init, freeze_VGG = self.freeze_VGG, \
+                                sensorium_ff_bool = self.sensorium_ff_bool, dataloaders = self.dataloaders, \
+                                HMAX_bool = self.HMAX_bool, n_ori = n_ori, n_scales = n_scales, simple_ff_bool = simple_ff_bool)
+        else:
+            layerss = ['S1', 'C1']
+            recurrent_circuit_list = []
+            for layer in layerss:
+                temp = FFhGRU(self.hidden_size, timesteps=self.timesteps, \
+                                kernel_size=self.kernel_size, nl=self.nl, input_size=3, \
+                                output_size=3, l1=0., pre_kernel_size=self.pre_kernel_size, \
+                                VGG_bool = self.VGG_bool, InT_bool = self.InT_bool, batchnorm_bool = self.batchnorm_bool, 
+                                noneg_constraint = self.noneg_constraint, exp_weight = self.exp_weight, \
+                                orthogonal_init = self.orthogonal_init, freeze_VGG = self.freeze_VGG, \
+                                sensorium_ff_bool = self.sensorium_ff_bool, dataloaders = self.dataloaders, \
+                                HMAX_bool = self.HMAX_bool, simple_to_complex = self.simple_to_complex, \
+                                simple_to_complex_layer = layer, n_ori = n_ori, n_scales = n_scales, simple_ff_bool = self.simple_ff_bool)
+                recurrent_circuit_list.append(temp)
+
+            recurrent_circuit = OrderedDict([(layer, recurrent_circuit_list[l_i]) for l_i, layer in enumerate(layerss)])
+
+            self.recurrent_circuit = nn.Sequential(recurrent_circuit)
+
+
+        # print('recurrent_circuit : ',self.recurrent_circuit)
 
             
         if not self.gaussian_bool:    
@@ -694,20 +722,20 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
             session_shape_dict = get_dims_for_loader_dict(self.dataloaders)
             print('session_shape_dict : ',session_shape_dict)
 
-            if not self.sensorium_ff_bool:
+            if not (self.sensorium_ff_bool or self.HMAX_bool or self.simple_ff_bool):
                 for k, v in session_shape_dict.items():
                     session_shape_dict[k]['images'] = torch.Size([v['images'][0], 3, v['images'][2], v['images'][3]])
                 print('session_shape_dict stacked : ',session_shape_dict)
 
             n_neurons_dict = {k: v[out_name][1] for k, v in session_shape_dict.items()}
+            print('n_neurons_dict : ',n_neurons_dict)
             input_channels = [v[in_name][1] for v in session_shape_dict.values()]
+            print('input_channels : ',input_channels)
             in_shapes_dict = {k: get_module_output(self.recurrent_circuit, v[in_name])[1:] for k, v in session_shape_dict.items()}
+            print('in_shapes_dict : ',in_shapes_dict)
 
             grid_mean_predictor, grid_mean_predictor_type, source_grids = prepare_grid(grid_mean_predictor, self.dataloaders)
 
-            print('in_shapes_dict : ',in_shapes_dict)
-            print('n_neurons_dict : ',n_neurons_dict)
-            print('input_channels : ',input_channels)
             print('source_grids : ',source_grids['21067-10-18'].shape)
 
             self.gaussian_readout = MultipleFullGaussian2d(
@@ -872,7 +900,7 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
             if len(images[i].shape) == 4:
                 images[i] = images[i].reshape(-1, 1, h, w)
                 # For getting 3 channels such that we can use with pretrained feefdorward drives
-                if not self.sensorium_ff_bool:
+                if not (self.sensorium_ff_bool or self.HMAX_bool or self.simple_ff_bool):
                     images[i] = torch.cat([images[i], images[i], images[i]], dim = 1)
                 # Akash: No need to reshape here
                 # target_neural_resp = target_neural_resp.reshape(-1)
@@ -952,7 +980,7 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
         if len(images.shape) == 4:
             images = images.reshape(-1, 1, h, w)
             # For getting 3 channels such that we can use with pretrained feefdorward drives
-            if not self.sensorium_ff_bool:
+            if not (self.sensorium_ff_bool or self.HMAX_bool or self.simple_ff_bool):
                 images = torch.cat([images, images, images], dim = 1)
             # Akash: No need to reshape here
             # target_neural_resp = target_neural_resp.reshape(-1)
@@ -1076,7 +1104,7 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
         if len(images.shape) == 4:
             images = images.reshape(-1, 1, h, w)
             # For getting 3 channels such that we can use with pretrained feefdorward drives
-            if not self.sensorium_ff_bool:
+            if not (self.sensorium_ff_bool or self.HMAX_bool or self.simple_ff_bool):
                 images = torch.stack([images, images, images], dim = 1)
                 images = images.squeeze()
             # Akash: No need to reshape here
@@ -1116,7 +1144,7 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
         ###########################
         # Save pred_neural_resp
         self.test_neural_responses = torch.cat(self.test_neural_responses, dim = 0)
-        job_dir = os.path.join("/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/test_neural_responses", self.prj_name)
+        job_dir = os.path.join("/media/data_cifs/projects/prj_sensorium/arjun/test_neural_responses", self.prj_name)
         os.makedirs(job_dir, exist_ok=True)
         file_name = os.path.join(job_dir, "neural_responses.npy")
         np.save(file_name, self.test_neural_responses.numpy())

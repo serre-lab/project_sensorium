@@ -23,6 +23,8 @@ from neuralpredictors.layers.cores import (
 import warnings
 warnings.filterwarnings('ignore')
 
+from HMAX_V1_FF import HMAX
+
 # Seeds
 import random
 random.seed(1)
@@ -366,8 +368,8 @@ class hConvGRUCell(nn.Module):
 
         if self.noneg_constraint: # and not(self.batchnorm_bool):
                 # print('new_sigmoid')
-                # activ_sig = noneg_sigmoid
-                activ_sig = activ
+                activ_sig = noneg_sigmoid
+                # activ_sig = activ
 
         # Attention gate: filter input_ and excitation
         if self.use_attention:
@@ -437,7 +439,8 @@ class FFhGRU(nn.Module):
                  lesion_alpha=False, lesion_mu=False, lesion_gamma=False, lesion_kappa=False, nl=F.softplus, l1=0., output_size=3, \
                  num_rbp_steps=10, LCP=0., jv_penalty_weight=0.002, pre_kernel_size = 7, VGG_bool = True, InT_bool = True, \
                  batchnorm_bool = True, noneg_constraint = False, exp_weight = False, orthogonal_init = True, freeze_VGG = False, \
-                 sensorium_ff_bool = False, dataloaders = None):
+                 sensorium_ff_bool = False, dataloaders = None, HMAX_bool = False, simple_to_complex = False, \
+                 simple_to_complex_layer = None, n_ori = None, n_scales = None, simple_ff_bool = False):
         '''
         '''
         super(FFhGRU, self).__init__()
@@ -453,12 +456,44 @@ class FFhGRU(nn.Module):
         self.exp_weight = exp_weight
         self.orthogonal_init = orthogonal_init
         self.freeze_VGG = freeze_VGG
+        self.HMAX_bool = HMAX_bool
+        self.simple_to_complex = simple_to_complex
+        self.simple_to_complex_layer = simple_to_complex_layer
+        self.n_ori = n_ori
+        self.n_scales = n_scales
+        self.simple_ff_bool = simple_ff_bool
         self.LCP = LCP
         self.jv_penalty_weight = jv_penalty_weight
         if l1 > 0:
             self.preproc = L1(nn.Conv2d(input_size, dimensions, kernel_size=kernel_size, stride=1, padding=kernel_size // 2), weight_decay=l1)
-        elif not(VGG_bool or sensorium_ff_bool):
-            self.preproc = nn.Conv2d(input_size, dimensions, kernel_size=pre_kernel_size, stride=1, padding=pre_kernel_size // 2)
+        elif not(VGG_bool or sensorium_ff_bool or HMAX_bool or simple_ff_bool):
+            self.preproc = nn.Conv2d(1, dimensions, kernel_size=pre_kernel_size, stride=1, padding=pre_kernel_size // 2)
+        elif self.simple_ff_bool:
+            if self.simple_to_complex:
+                if self.simple_to_complex_layer == 'S1':
+                    conv0 = nn.Conv2d(1, 25, kernel_size=7, padding=7 // 2)
+                    part1 = np.load("/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/gabor_serre.npy")
+                    conv0.weight.data = torch.FloatTensor(part1)
+                    self.preproc = conv0
+                    self.hgru_size = 25
+                elif self.simple_to_complex_layer == 'C1':
+                    self.preproc = nn.Sequential(
+                                                nn.Conv2d(25, dimensions, kernel_size=pre_kernel_size, stride=1, padding=pre_kernel_size // 2),
+                                                # nn.Conv2d(dimensions, dimensions, kernel_size=pre_kernel_size, stride=1, padding=pre_kernel_size // 2),
+                                                nn.MaxPool2d(2, stride=1))
+        elif self.HMAX_bool:
+            if not self.simple_to_complex:
+                self.preproc = HMAX()
+            else:
+                if self.simple_to_complex_layer == 'S1':
+                    preproc = HMAX(n_ori = self.n_ori, n_scales = self.n_scales, s1_trainable_filters = True)
+                    self.preproc = preproc.s1
+                    self.hgru_size = self.n_ori * self.n_scales
+                elif self.simple_to_complex_layer == 'C1':
+                    preproc = HMAX(n_ori = self.n_ori, n_scales = self.n_scales, s1_trainable_filters = True)
+                    # self.before_preproc = nn.Conv2d(self.n_ori * self.n_scales, self.n_ori * self.n_scales, kernel_size=pre_kernel_size, stride=1, padding=pre_kernel_size // 2)
+                    self.preproc = preproc.c1
+                    self.hgru_size = self.n_ori * (self.n_scales-1)
         elif VGG_bool:
             vgg_pretrained_features = models.vgg16(pretrained=True).features
             # vgg_pretrained_features = models.squeezenet1_1(pretrained=True).features
@@ -587,7 +622,18 @@ class FFhGRU(nn.Module):
 
     def forward(self, x, testmode=False, give_timesteps = False):
         # First step: replicate x over the channel dim self.hgru_size times
-        xbn = self.preproc(x)
+        if self.simple_to_complex and self.HMAX_bool:
+            if self.simple_to_complex_layer == 'C1':
+                # x = self.before_preproc(x)
+                # Bx(C*S)xHxW ---> BxCxSxHxW ---> BxCxHxWxS 
+                x = x.reshape(x.shape[0], self.n_ori, self.n_scales, x.shape[2], x.shape[3])
+                x = x.permute(0,1,3,4,2)
+            # BxCxHxWxS ---> Bx(C*S)xHxW
+            xbn = self.preproc(x)
+            xbn = xbn.permute(0,1,4,2,3)
+            xbn = xbn.reshape(xbn.shape[0], -1, xbn.shape[3], xbn.shape[4])
+        else:
+            xbn = self.preproc(x)
         # Akash changed from batchnorm to batchnorm_bool
         if self.batchnorm_bool:
             xbn = self.dropout(xbn)
@@ -661,6 +707,8 @@ class FFhGRU(nn.Module):
             excitation = dummyhgru.apply(pen_exc, last_exc, self.num_rbp_steps)
         else:
             raise NotImplementedError(self.grad_method)
+
+        
 
         
 
