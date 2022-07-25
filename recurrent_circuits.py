@@ -12,13 +12,14 @@ from torchvision import datasets, models, transforms
 
 from nnfabrik.utility.nn_helpers import set_random_seed, get_dims_for_loader_dict
 
-from neuralpredictors.layers.encoders import FiringRateEncoder
-from neuralpredictors.layers.shifters import MLPShifter, StaticAffine2dShifter
-from neuralpredictors.layers.cores import (
-    Stacked2dCore,
-    SE2dCore,
-    RotationEquivariant2dCore,
-)
+from neuralpredictors.layers.cores import Stacked2dCore
+# from neuralpredictors.layers.encoders import FiringRateEncoder
+# from neuralpredictors.layers.shifters import MLPShifter, StaticAffine2dShifter
+# from neuralpredictors.layers.cores import (
+#     Stacked2dCore,
+#     SE2dCore,
+#     RotationEquivariant2dCore,
+# )
 
 import warnings
 warnings.filterwarnings('ignore')

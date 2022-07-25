@@ -106,7 +106,7 @@ if __name__ == '__main__':
     else:
         prj_name = prj_name + "_pre_training" #+ "_continued"
         n_neurons_list = [8372, 7344, 7334, 8107, 8098, 7776]
-        batch_size_per_gpu_train = 16
+        batch_size_per_gpu_train = 32
         batch_size_per_gpu_val = 128
 
     lr = config['DEFAULT'].getfloat('lr')
