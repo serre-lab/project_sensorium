@@ -496,20 +496,22 @@ class FFhGRU(nn.Module):
                     self.preproc = preproc.c1
                     self.hgru_size = self.n_ori * (self.n_scales-1)
         elif VGG_bool:
-            vgg_pretrained_features = models.vgg16(pretrained=True).features
-            # vgg_pretrained_features = models.squeezenet1_1(pretrained=True).features
+            # pretrained_features = models.vgg16(pretrained=True).features
+            pretrained_features = models.alexnet(pretrained=True).features
+            # pretrained_features = models.squeezenet1_1(pretrained=True).features
 
-            # vgg_pretrained_features
-            # print(vgg_pretrained_features)
+            # pretrained_features
+            # print(pretrained_features)
             preproc = torch.nn.Sequential()
-            for x in range(10): # VGG-16
+            # for x in range(10): # VGG-16
             # for x in range(6): # SQZN
-                print(vgg_pretrained_features[x])
+            for x in range(5): # AlexNet
+                print(pretrained_features[x])
                 # if x in [4,9]:
                 #     max_pool_3_1 = torch.nn.MaxPool2d(kernel_size=3, stride=1, padding=0, dilation=1, ceil_mode=False)
                 #     self.preproc.add_module(str(x), max_pool_3_1)
                 # else:
-                preproc.add_module(str(x), vgg_pretrained_features[x])
+                preproc.add_module(str(x), pretrained_features[x])
 
             if self.freeze_VGG:
                 ##################################################################
@@ -716,7 +718,388 @@ class FFhGRU(nn.Module):
         return excitation #, time_steps_exc, time_steps_inh, xbn, weights_to_check
 
 
-            
+class FFhGRU_gamma(nn.Module):
+
+    def __init__(self, dimensions = 25, input_size=3, timesteps=8, kernel_size=15, jacobian_penalty=False, grad_method='bptt', no_inh=False, \
+                 lesion_alpha=False, lesion_mu=False, lesion_gamma=False, lesion_kappa=False, nl=F.softplus, l1=0., output_size=3, \
+                 num_rbp_steps=10, LCP=0., jv_penalty_weight=0.002, pre_kernel_size = 7, VGG_bool = True, InT_bool = True, \
+                 batchnorm_bool = True, noneg_constraint = False, exp_weight = False, orthogonal_init = True, freeze_VGG = False, \
+                 sensorium_ff_bool = False, dataloaders = None, HMAX_bool = False, simple_to_complex = False, \
+                 simple_to_complex_layer = None, n_ori = None, n_scales = None, simple_ff_bool = False):
+        '''
+        '''
+        super(FFhGRU_gamma, self).__init__()
+        self.timesteps = timesteps
+        self.jacobian_penalty = jacobian_penalty
+        self.grad_method = grad_method
+        self.hgru_size = dimensions
+        self.output_size = output_size
+        self.num_rbp_steps = num_rbp_steps
+        self.InT_bool = InT_bool
+        self.batchnorm_bool = batchnorm_bool
+        self.noneg_constraint = noneg_constraint
+        self.exp_weight = exp_weight
+        self.orthogonal_init = orthogonal_init
+        self.freeze_VGG = freeze_VGG
+        self.HMAX_bool = HMAX_bool
+        self.simple_to_complex = simple_to_complex
+        self.simple_to_complex_layer = simple_to_complex_layer
+        self.n_ori = n_ori
+        self.n_scales = n_scales
+        self.simple_ff_bool = simple_ff_bool
+        self.LCP = LCP
+        self.jv_penalty_weight = jv_penalty_weight
+        if l1 > 0:
+            self.preproc = L1(nn.Conv2d(input_size, dimensions, kernel_size=kernel_size, stride=1, padding=kernel_size // 2), weight_decay=l1)
+        elif not(VGG_bool or sensorium_ff_bool or HMAX_bool or simple_ff_bool):
+            self.preproc = nn.Conv2d(1, dimensions, kernel_size=pre_kernel_size, stride=1, padding=pre_kernel_size // 2)
+        elif self.simple_ff_bool:
+            if self.simple_to_complex:
+                if self.simple_to_complex_layer == 'S1':
+                    conv0 = nn.Conv2d(1, 25, kernel_size=7, padding=7 // 2)
+                    part1 = np.load("/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/gabor_serre.npy")
+                    conv0.weight.data = torch.FloatTensor(part1)
+                    self.preproc = conv0
+                    self.hgru_size = 25
+                elif self.simple_to_complex_layer == 'C1':
+                    self.preproc = nn.Sequential(
+                                                nn.Conv2d(25, dimensions, kernel_size=pre_kernel_size, stride=1, padding=pre_kernel_size // 2),
+                                                # nn.Conv2d(dimensions, dimensions, kernel_size=pre_kernel_size, stride=1, padding=pre_kernel_size // 2),
+                                                nn.MaxPool2d(2, stride=1))
+        elif self.HMAX_bool:
+            # if not self.simple_to_complex:
+            #     self.preproc = HMAX()
+            # else:
+            # if self.simple_to_complex_layer == 'S1':
+            preproc = HMAX(n_ori = self.n_ori, n_scales = self.n_scales, s1_trainable_filters = True)
+            self.preproc_s1 = preproc.s1
+            self.hgru_size_s1 = self.n_ori * self.n_scales
+            # elif self.simple_to_complex_layer == 'C1':
+            # preproc = HMAX(n_ori = self.n_ori, n_scales = self.n_scales, s1_trainable_filters = True)
+            # self.before_preproc = nn.Conv2d(self.n_ori * self.n_scales, self.n_ori * self.n_scales, kernel_size=pre_kernel_size, stride=1, padding=pre_kernel_size // 2)
+            self.preproc_c1 = preproc.c1
+            self.hgru_size_c1 = self.n_ori * (self.n_scales-1)
+        elif VGG_bool:
+            vgg_pretrained_features = models.vgg16(pretrained=True).features
+            # vgg_pretrained_features = models.squeezenet1_1(pretrained=True).features
+
+            # vgg_pretrained_features
+            # print(vgg_pretrained_features)
+            preproc = torch.nn.Sequential()
+            for x in range(10): # VGG-16
+            # for x in range(6): # SQZN
+                print(vgg_pretrained_features[x])
+                # if x in [4,9]:
+                #     max_pool_3_1 = torch.nn.MaxPool2d(kernel_size=3, stride=1, padding=0, dilation=1, ceil_mode=False)
+                #     self.preproc.add_module(str(x), max_pool_3_1)
+                # else:
+                preproc.add_module(str(x), vgg_pretrained_features[x])
+
+            if self.freeze_VGG:
+                ##################################################################
+                #################### Freezing Weights ############################
+                ##################################################################
+                preproc.eval()
+                # freeze params
+                for param in preproc.parameters():
+                    param.requires_grad = False
+                
+            self.preproc = preproc
+
+        elif sensorium_ff_bool:
+
+            session_shape_dict = get_dims_for_loader_dict(dataloaders)
+            input_channels = [v['images'][1] for v in session_shape_dict.values()]
+            core_input_channels = (
+                                    list(input_channels.values())[0]
+                                    if isinstance(input_channels, dict)
+                                    else input_channels[0]
+                                )
+
+            print('input_channels : ',input_channels)
+            print('core_input_channels : ',core_input_channels)
+
+            # Hyper-Parameters
+            hidden_channels=self.hgru_size
+            input_kern=9
+            hidden_kern=7
+            layers=4
+            gamma_input=6.3831
+            skip=0
+            final_nonlinearity=True
+            core_bias=False
+            momentum=0.9
+            pad_input=False
+            batch_norm=True
+            hidden_dilation=1
+            laplace_padding=None
+            input_regularizer="LaplaceL2norm"
+            stack=-1
+            depth_separable=True
+            linear=False
+            attention_conv=False
+            hidden_padding=None
+            use_avg_reg=False
+
+            core = Stacked2dCore(
+                    input_channels=core_input_channels,
+                    hidden_channels=hidden_channels,
+                    input_kern=input_kern,
+                    hidden_kern=hidden_kern,
+                    layers=layers,
+                    gamma_input=gamma_input,
+                    skip=skip,
+                    final_nonlinearity=final_nonlinearity,
+                    bias=core_bias,
+                    momentum=momentum,
+                    pad_input=pad_input,
+                    batch_norm=batch_norm,
+                    hidden_dilation=hidden_dilation,
+                    laplace_padding=laplace_padding,
+                    input_regularizer=input_regularizer,
+                    stack=stack,
+                    depth_separable=depth_separable,
+                    linear=linear,
+                    attention_conv=attention_conv,
+                    hidden_padding=hidden_padding,
+                    use_avg_reg=use_avg_reg,)
+
+            self.preproc = core
+
+        # init.xavier_normal_(self.preproc.weight)
+        # init.constant_(self.preproc.bias, 0)
+
+
+        if self.InT_bool:
+            '''
+            self, hidden_size, kernel_size, timesteps, batchnorm=True, grad_method='bptt', use_attention=False, \
+            no_inh=False, lesion_alpha=False, lesion_gamma=False, lesion_mu=False, lesion_kappa=False
+            '''
+            self.unit_s1 = hConvGRUCell(
+                # input_size=input_size,
+                hidden_size=self.hgru_size_s1,
+                kernel_size=kernel_size,
+                use_attention=False,
+                no_inh=no_inh,
+                batchnorm_bool = self.batchnorm_bool,
+                noneg_constraint = self.noneg_constraint,
+                exp_weight = self.exp_weight,
+                orthogonal_init = self.orthogonal_init,
+                # l1=l1,
+                lesion_alpha=lesion_alpha,
+                lesion_mu=lesion_mu,
+                lesion_gamma=lesion_gamma,
+                lesion_kappa=lesion_kappa,
+                timesteps=timesteps)
+
+            self.unit_c1 = hConvGRUCell(
+                # input_size=input_size,
+                hidden_size=self.hgru_size_c1,
+                kernel_size=kernel_size,
+                use_attention=False,
+                no_inh=no_inh,
+                batchnorm_bool = self.batchnorm_bool,
+                noneg_constraint = self.noneg_constraint,
+                exp_weight = self.exp_weight,
+                orthogonal_init = self.orthogonal_init,
+                # l1=l1,
+                lesion_alpha=lesion_alpha,
+                lesion_mu=lesion_mu,
+                lesion_gamma=lesion_gamma,
+                lesion_kappa=lesion_kappa,
+                timesteps=timesteps)
+
+            # self.unit_sc1 = hConvGRUCell(
+            #     # input_size=input_size,
+            #     hidden_size=self.hgru_size_c1,
+            #     kernel_size=kernel_size,
+            #     use_attention=False,
+            #     no_inh=no_inh,
+            #     batchnorm_bool = self.batchnorm_bool,
+            #     noneg_constraint = self.noneg_constraint,
+            #     exp_weight = self.exp_weight,
+            #     orthogonal_init = self.orthogonal_init,
+            #     # l1=l1,
+            #     lesion_alpha=lesion_alpha,
+            #     lesion_mu=lesion_mu,
+            #     lesion_gamma=lesion_gamma,
+            #     lesion_kappa=lesion_kappa,
+            #     timesteps=timesteps)
+
+        else:
+            self.unit1 = hConvGRUCell_org(
+                input_size=input_size, 
+                hidden_size=self.hgru_size, 
+                kernel_size=kernel_size, 
+                batchnorm=True, 
+                timesteps=timesteps)
+
+        self.dropout = nn.Dropout(p=0.4)
+
+        self.nl = nl
+
+
+    def forward(self, x, testmode=False, give_timesteps = False):
+        # First step: replicate x over the channel dim self.hgru_size times
+        # if self.simple_to_complex and self.HMAX_bool:
+        #     if self.simple_to_complex_layer == 'C1':
+        #         # x = self.before_preproc(x)
+        #         # Bx(C*S)xHxW ---> BxCxSxHxW ---> BxCxHxWxS 
+        #         x = x.reshape(x.shape[0], self.n_ori, self.n_scales, x.shape[2], x.shape[3])
+        #         x = x.permute(0,1,3,4,2)
+        #     # BxCxHxWxS ---> Bx(C*S)xHxW
+        #     xbn = self.preproc(x)
+        #     xbn = xbn.permute(0,1,4,2,3)
+        #     xbn = xbn.reshape(xbn.shape[0], -1, xbn.shape[3], xbn.shape[4])
+        # else:
+        #     xbn = self.preproc(x)
+        # # Akash changed from batchnorm to batchnorm_bool
+        # if self.batchnorm_bool:
+        #     xbn = self.dropout(xbn)
+        # # print('input map : ', xbn.shape)
+        # # xbn = self.bn(xbn)  # This might be hurting me...
+        # xbn = self.nl(xbn)  # TEST TO SEE IF THE NL STABLIZES
+
+
+        # # Now run RNN
+        # x_shape = xbn.shape
+        # if self.InT_bool:
+        #     excitation_s1 = torch.zeros((x_shape[0], x_shape[1], x_shape[2], x_shape[3]), requires_grad=False).to(x.device)
+        #     inhibition_s1 = torch.zeros((x_shape[0], x_shape[1], x_shape[2], x_shape[3]), requires_grad=False).to(x.device)
+
+        #     excitation_c1 = torch.zeros((x_shape[0], x_shape[1], x_shape[2], x_shape[3]), requires_grad=False).to(x.device)
+        #     inhibition_c1 = torch.zeros((x_shape[0], x_shape[1], x_shape[2], x_shape[3]), requires_grad=False).to(x.device)
+        # else:
+        #     excitation_s1 = None
+        #     inhibition_s1 = None
+
+        #     excitation_c1 = None
+        #     inhibition_c1 = None
+
+        # Loop over frames
+        states = []
+        gates = []
+
+        time_steps_exc = []
+        time_steps_inh = []
+
+        if self.grad_method == "bptt":
+            excitation_s1_sc = None
+            inhibition_s1_sc = None
+            for t in range(self.timesteps):
+                if self.InT_bool:
+                    # S1
+                    s1_cells = self.preproc_s1(x)
+                    s1_cells = s1_cells.permute(0,1,4,2,3)
+                    s1_cells = s1_cells.reshape(s1_cells.shape[0], -1, s1_cells.shape[3], s1_cells.shape[4])
+                    s1_cells = self.nl(s1_cells)
+
+                    if t == 0:
+                        s1_shape = s1_cells.shape 
+                        excitation_s1 = torch.zeros((s1_shape[0], s1_shape[1], s1_shape[2], s1_shape[3]), requires_grad=False).to(x.device)
+                        inhibition_s1 = torch.zeros((s1_shape[0], s1_shape[1], s1_shape[2], s1_shape[3]), requires_grad=False).to(x.device)
+                    # else:
+                    #     excitation_s1 = excitation_s1_sc
+                    #     inhibition_s1 = inhibition_s1_sc
+
+                    out_s1 = self.unit_s1(
+                        input_=s1_cells,
+                        inhibition=inhibition_s1,
+                        excitation=excitation_s1,
+                        activ=self.nl,
+                        testmode=testmode,
+                        t_i = t)
+
+                    inhibition_s1, excitation_s1, weights_to_check_s1 = out_s1
+
+                    # C1
+                    c1_cells = excitation_s1.reshape(excitation_s1.shape[0], self.n_ori, self.n_scales, excitation_s1.shape[2], excitation_s1.shape[3])
+                    c1_cells = c1_cells.permute(0,1,3,4,2)
+                    c1_cells = self.preproc_c1(c1_cells)
+                    c1_cells = c1_cells.permute(0,1,4,2,3)
+                    c1_cells = c1_cells.reshape(c1_cells.shape[0], -1, c1_cells.shape[3], c1_cells.shape[4])
+                    c1_cells = self.nl(c1_cells)
+
+                    if t == 0:
+                        c1_shape = c1_cells.shape
+                        excitation_c1 = torch.zeros((c1_shape[0], c1_shape[1], c1_shape[2], c1_shape[3]), requires_grad=False).to(x.device)
+                        inhibition_c1 = torch.zeros((c1_shape[0], c1_shape[1], c1_shape[2], c1_shape[3]), requires_grad=False).to(x.device)
+
+                    out_c1 = self.unit_c1(
+                        input_=c1_cells,
+                        inhibition=inhibition_c1,
+                        excitation=excitation_c1,
+                        activ=self.nl,
+                        testmode=testmode,
+                        t_i = t)
+
+                    inhibition_c1, excitation_c1, weights_to_check_c1 = out_c1
+
+                    # SC1
+                    # excitation_sc1 = excitation_s1
+                    # inhibition_sc1 = inhibition_s1
+
+                    # c1_cells = F.interpolate(c1_cells,(excitation_s1.shape[2], excitation_s1.shape[3]), mode='bilinear',align_corners=True)
+
+                    # out_sc1 = self.unit_sc1(
+                    #     input_=c1_cells,
+                    #     inhibition=inhibition_sc1,
+                    #     excitation=excitation_sc1,
+                    #     activ=self.nl,
+                    #     testmode=testmode,
+                    #     t_i = t)
+
+                    # inhibition_sc1, excitation_sc1, weights_to_check_sc1 = out_sc1
+
+                    # excitation_s1_sc = excitation_sc1
+                    # inhibition_s1_sc = inhibition_sc1
+
+
+                else:
+                    out = self.unit1(
+                        input_=xbn,
+                        prev_state2=excitation,
+                        timestep = t
+                        )
+                # if testmode:
+                #     inhibition, excitation, gate, weights_to_check = out 
+                #     time_steps_exc.append(excitation)
+                #     time_steps_inh.append(inhibition)
+                #     gates.append(gate)  # This should learn to keep the winner
+                #     states.append(self.readout_conv(excitation))  # This should learn to keep the winner
+                # else:
+                #     inhibition, excitation, weights_to_check = out 
+                #     time_steps_exc.append(excitation)
+                #     time_steps_inh.append(inhibition)
+
+        elif self.grad_method == "rbp":
+            with torch.no_grad():
+               for t in range(self.timesteps - 1):
+                    out = self.unit1(
+                        input_=xbn,
+                        inhibition=inhibition,
+                        excitation=excitation,
+                        activ=self.nl,
+                        testmode=testmode)
+                    if testmode:
+                        inhibition, excitation, gate = out
+                        gates.append(gate)  # This should learn to keep the winner
+                        states.append(self.readout_conv(excitation))  # This should learn to keep the winner
+                    else:
+                        inhibition, excitation = out
+            pen_exc = excitation.detach().requires_grad_()
+            last_inh, last_exc = self.unit1(xbn, inhibition=inhibition, excitation=pen_exc, activ=self.nl, testmode=testmode)
+            import pdb;pdb.set_trace()
+            # Need to attach exc with inh to propoagate grads
+            excitation = dummyhgru.apply(pen_exc, last_exc, self.num_rbp_steps)
+        else:
+            raise NotImplementedError(self.grad_method)
+
+        
+
+        
+
+        return excitation_c1 #, time_steps_exc, time_steps_inh, xbn, weights_to_check
 
 ################################################################################################################################
 ################################################################################################################################

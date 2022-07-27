@@ -143,7 +143,7 @@ class sensorium_loader_direct(pl.LightningDataModule):
 
 
 class sensorium_loader_pretrain(pl.LightningDataModule):
-    def __init__(self, batch_size_per_gpu_train, batch_size_per_gpu_val, n_gpus):
+    def __init__(self, batch_size_per_gpu_train, batch_size_per_gpu_val, n_gpus, scale_images):
         super().__init__()
           
         # Batch Size
@@ -182,7 +182,7 @@ class sensorium_loader_pretrain(pl.LightningDataModule):
                  'include_behavior': False,
                  'include_eye_position': False,
                  'batch_size': self.batch_size_train,
-                 'scale': .25,
+                 'scale': scale_images,
                  }
         
 

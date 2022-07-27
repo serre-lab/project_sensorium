@@ -106,7 +106,7 @@ if __name__ == '__main__':
     else:
         prj_name = prj_name + "_pre_training" #+ "_continued"
         n_neurons_list = [8372, 7344, 7334, 8107, 8098, 7776]
-        batch_size_per_gpu_train = 32
+        batch_size_per_gpu_train = 24
         batch_size_per_gpu_val = 128
 
     lr = config['DEFAULT'].getfloat('lr')
@@ -141,6 +141,9 @@ if __name__ == '__main__':
 
     corr_loss = config[username].getboolean('corr_loss')
     simple_to_complex = config[username].getboolean('simple_to_complex')
+    simple_to_complex_gamma = config[username].getboolean('simple_to_complex_gamma')
+
+    scale_image = config[username].getboolean('scale_image')
 
     # dataset_names = ['21067-10-18', '22846-10-16', '23343-5-17', '23656-14-22', '23964-4-22']
 
@@ -148,7 +151,7 @@ if __name__ == '__main__':
     if direct_training:
         data = sensorium_loader_direct(batch_size_per_gpu, n_gpus)
     else:
-        data = sensorium_loader_pretrain(batch_size_per_gpu_train, batch_size_per_gpu_val, n_gpus)
+        data = sensorium_loader_pretrain(batch_size_per_gpu_train, batch_size_per_gpu_val, n_gpus, scale_image)
 
     # Initializing the model
     if direct_training:
@@ -173,7 +176,7 @@ if __name__ == '__main__':
                     pre_kernel_size, VGG_bool, freeze_VGG, InT_bool, batchnorm_bool, orthogonal_init, \
                     exp_weight, noneg_constraint, visualize_bool, data.dataloaders_train["train"], \
                     gaussian_bool, sensorium_ff_bool, clamp_weights, plot_weights, corr_loss, HMAX_bool, \
-                    simple_to_complex, n_ori, n_scales, simple_ff_bool)
+                    simple_to_complex, n_ori, n_scales, simple_ff_bool, simple_to_complex_gamma)
 
     if test_mode or val_mode or continue_training:
         model = model.load_from_checkpoint('/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/checkpoints/' + prj_name + '/sensorium-epoch=26-val_corr=0.3265847861766815-val_loss=13657369.0.ckpt')
@@ -192,6 +195,7 @@ if __name__ == '__main__':
         model.base_freeze = base_freeze
         model.HMAX_bool = HMAX_bool
         model.simple_to_complex = simple_to_complex
+        model.simple_to_complex_gamma = simple_to_complex_gamma
 
         model.gaussian_bool = gaussian_bool
         model.sensorium_ff_bool = sensorium_ff_bool

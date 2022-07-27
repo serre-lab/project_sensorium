@@ -1,4 +1,7 @@
 import numpy as np
+import neuralpredictors
+from neuralpredictors import measures
+from neuralpredictors.measures import np_functions
 from neuralpredictors.measures.np_functions import corr, fev
 
 

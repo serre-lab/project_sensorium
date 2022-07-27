@@ -52,7 +52,7 @@ import warnings
 import random
 random.seed(1)
 
-from recurrent_circuits import FFhGRU
+from recurrent_circuits import FFhGRU, FFhGRU_gamma
 from sensorium.utility import plotting
 
 from sensorium.models.utility import prepare_grid
@@ -589,7 +589,8 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
                  pre_kernel_size, VGG_bool, freeze_VGG, InT_bool, batchnorm_bool, orthogonal_init, \
                  exp_weight, noneg_constraint, visualize_bool = False, dataloaders = None, gaussian_bool = False, \
                  sensorium_ff_bool = False, clamp_weights = False, plot_weights = False, corr_loss = False, \
-                 HMAX_bool = False, simple_to_complex = False, n_ori = None, n_scales = None, simple_ff_bool = None):
+                 HMAX_bool = False, simple_to_complex = False, n_ori = None, n_scales = None, simple_ff_bool = None, \
+                 simple_to_complex_gamma = False):
         super().__init__()
         
         self.parameter_dict = {'prj_name':prj_name, 'lr':lr, 'weight_decay':weight_decay, 'n_neurons':n_neurons_list, \
@@ -598,7 +599,8 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
                                'orthogonal_init':orthogonal_init, 'exp_weight':exp_weight, 'noneg_constraint':noneg_constraint, \
                                'visualize_bool':visualize_bool, 'gaussian_bool':gaussian_bool, 'sensorium_ff_bool':sensorium_ff_bool, \
                                'clamp_weights':clamp_weights, 'plot_weights':plot_weights, 'corr_loss':corr_loss, 'HMAX_bool':HMAX_bool, \
-                               'simple_to_complex' : simple_to_complex, 'n_ori':n_ori, 'n_scales':n_scales, 'simple_ff_bool':simple_ff_bool}
+                               'simple_to_complex' : simple_to_complex, 'n_ori':n_ori, 'n_scales':n_scales, 'simple_ff_bool':simple_ff_bool, \
+                               'simple_to_complex_gamma' : simple_to_complex_gamma}
 
         print('self.parameter_dict : ',self.parameter_dict)
 
@@ -634,6 +636,7 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
         self.HMAX_bool = HMAX_bool
         self.simple_to_complex = simple_to_complex
         self.simple_ff_bool = simple_ff_bool
+        self.simple_to_complex_gamma = simple_to_complex_gamma
 
         if self.batchnorm_bool:
             # self.nl = F.softplus
@@ -649,7 +652,7 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
 
         print('Going to recurrent_circuit')
 
-        if not self.simple_to_complex:
+        if not (self.simple_to_complex or self.simple_to_complex_gamma):
             self.recurrent_circuit = FFhGRU(self.hidden_size, timesteps=self.timesteps, \
                                 kernel_size=self.kernel_size, nl=self.nl, input_size=3, \
                                 output_size=3, l1=0., pre_kernel_size=self.pre_kernel_size, \
@@ -658,7 +661,7 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
                                 orthogonal_init = self.orthogonal_init, freeze_VGG = self.freeze_VGG, \
                                 sensorium_ff_bool = self.sensorium_ff_bool, dataloaders = self.dataloaders, \
                                 HMAX_bool = self.HMAX_bool, n_ori = n_ori, n_scales = n_scales, simple_ff_bool = simple_ff_bool)
-        else:
+        elif self.simple_to_complex:
             layerss = ['S1', 'C1']
             recurrent_circuit_list = []
             for layer in layerss:
@@ -676,6 +679,20 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
             recurrent_circuit = OrderedDict([(layer, recurrent_circuit_list[l_i]) for l_i, layer in enumerate(layerss)])
 
             self.recurrent_circuit = nn.Sequential(recurrent_circuit)
+
+        elif self.simple_to_complex_gamma:
+
+            print('In HEREEEEE simple_to_complex_gamma')
+
+            self.recurrent_circuit = FFhGRU_gamma(self.hidden_size, timesteps=self.timesteps, \
+                                kernel_size=self.kernel_size, nl=self.nl, input_size=3, \
+                                output_size=3, l1=0., pre_kernel_size=self.pre_kernel_size, \
+                                VGG_bool = self.VGG_bool, InT_bool = self.InT_bool, batchnorm_bool = self.batchnorm_bool, 
+                                noneg_constraint = self.noneg_constraint, exp_weight = self.exp_weight, \
+                                orthogonal_init = self.orthogonal_init, freeze_VGG = self.freeze_VGG, \
+                                sensorium_ff_bool = self.sensorium_ff_bool, dataloaders = self.dataloaders, \
+                                HMAX_bool = self.HMAX_bool, simple_to_complex = self.simple_to_complex, \
+                                n_ori = n_ori, n_scales = n_scales, simple_ff_bool = self.simple_ff_bool)
 
 
         # print('recurrent_circuit : ',self.recurrent_circuit)
