@@ -496,16 +496,16 @@ class FFhGRU(nn.Module):
                     self.preproc = preproc.c1
                     self.hgru_size = self.n_ori * (self.n_scales-1)
         elif VGG_bool:
-            # pretrained_features = models.vgg16(pretrained=True).features
-            pretrained_features = models.alexnet(pretrained=True).features
+            pretrained_features = models.vgg16(pretrained=True).features
+            # pretrained_features = models.alexnet(pretrained=True).features
             # pretrained_features = models.squeezenet1_1(pretrained=True).features
 
             # pretrained_features
             # print(pretrained_features)
             preproc = torch.nn.Sequential()
-            # for x in range(10): # VGG-16
+            for x in range(10): # VGG-16
             # for x in range(6): # SQZN
-            for x in range(5): # AlexNet
+            # for x in range(5): # AlexNet
                 print(pretrained_features[x])
                 # if x in [4,9]:
                 #     max_pool_3_1 = torch.nn.MaxPool2d(kernel_size=3, stride=1, padding=0, dilation=1, ceil_mode=False)

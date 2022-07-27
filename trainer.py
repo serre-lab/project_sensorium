@@ -143,7 +143,7 @@ if __name__ == '__main__':
     simple_to_complex = config[username].getboolean('simple_to_complex')
     simple_to_complex_gamma = config[username].getboolean('simple_to_complex_gamma')
 
-    scale_image = config[username].getboolean('scale_image')
+    scale_image = config[username].getfloat('scale_image')
 
     # dataset_names = ['21067-10-18', '22846-10-16', '23343-5-17', '23656-14-22', '23964-4-22']
 
@@ -176,7 +176,7 @@ if __name__ == '__main__':
                     pre_kernel_size, VGG_bool, freeze_VGG, InT_bool, batchnorm_bool, orthogonal_init, \
                     exp_weight, noneg_constraint, visualize_bool, data.dataloaders_train["train"], \
                     gaussian_bool, sensorium_ff_bool, clamp_weights, plot_weights, corr_loss, HMAX_bool, \
-                    simple_to_complex, n_ori, n_scales, simple_ff_bool, simple_to_complex_gamma)
+                    simple_to_complex, n_ori, n_scales, simple_ff_bool, simple_to_complex_gamma, scale_image)
 
     if test_mode or val_mode or continue_training:
         model = model.load_from_checkpoint('/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/checkpoints/' + prj_name + '/sensorium-epoch=26-val_corr=0.3265847861766815-val_loss=13657369.0.ckpt')
@@ -222,7 +222,7 @@ if __name__ == '__main__':
     # Callbacks and Trainer
     checkpoint_callback = ModelCheckpoint(
                             monitor="val_corr",
-                            dirpath="/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/checkpoints/" + prj_name,
+                            dirpath="/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/"+username+"/checkpoints/" + prj_name,
                             filename="sensorium-{epoch}-{val_corr}-{val_loss}",
                             save_top_k=8,
                             mode="max",
@@ -237,6 +237,12 @@ if __name__ == '__main__':
     # Train
     if not(test_mode or val_mode):
         trainer.fit(model, data)
+
+        # Reading current config
+        with open("experiment_configuration.cfg", "r") as input:
+            with open("/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/"+username+"/checkpoints/" + prj_name + "/experiment_configuration.cfg", "w") as output:
+                for line in input:
+                    output.write(line)
     # Val
     elif val_mode:
         trainer.validate(model, data) 

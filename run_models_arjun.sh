@@ -9,7 +9,7 @@
 ##SBATCH --constraint=v100
 #SBATCH -o /cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/logs/arjun_MI_%A_%a_%J.out
 #SBATCH -e /cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/logs/arjun_MI_%A_%a_%J.err
-#SBATCH --account=carney-tserre-condo
+##SBATCH --account=carney-tserre-condo
 ##SBATCH --array=0-1
 
 ##SBATCH -p gpu

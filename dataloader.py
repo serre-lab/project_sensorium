@@ -149,6 +149,7 @@ class sensorium_loader_pretrain(pl.LightningDataModule):
         # Batch Size
         self.batch_size_train = n_gpus*batch_size_per_gpu_train
         self.batch_size_val = n_gpus*batch_size_per_gpu_val
+        self.scale_images = scale_images
         
         # Sensorium dataloader
         self.filenames = ['/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static21067-10-18-GrayImageNet-94c6ff995dac583098847cfecd43e7b6', 
@@ -182,7 +183,7 @@ class sensorium_loader_pretrain(pl.LightningDataModule):
                  'include_behavior': False,
                  'include_eye_position': False,
                  'batch_size': self.batch_size_train,
-                 'scale': scale_images,
+                 'scale': self.scale_images,
                  }
         
 

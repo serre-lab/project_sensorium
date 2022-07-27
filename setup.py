@@ -590,7 +590,7 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
                  exp_weight, noneg_constraint, visualize_bool = False, dataloaders = None, gaussian_bool = False, \
                  sensorium_ff_bool = False, clamp_weights = False, plot_weights = False, corr_loss = False, \
                  HMAX_bool = False, simple_to_complex = False, n_ori = None, n_scales = None, simple_ff_bool = None, \
-                 simple_to_complex_gamma = False):
+                 simple_to_complex_gamma = False, scale_image = None):
         super().__init__()
         
         self.parameter_dict = {'prj_name':prj_name, 'lr':lr, 'weight_decay':weight_decay, 'n_neurons':n_neurons_list, \
@@ -600,7 +600,7 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
                                'visualize_bool':visualize_bool, 'gaussian_bool':gaussian_bool, 'sensorium_ff_bool':sensorium_ff_bool, \
                                'clamp_weights':clamp_weights, 'plot_weights':plot_weights, 'corr_loss':corr_loss, 'HMAX_bool':HMAX_bool, \
                                'simple_to_complex' : simple_to_complex, 'n_ori':n_ori, 'n_scales':n_scales, 'simple_ff_bool':simple_ff_bool, \
-                               'simple_to_complex_gamma' : simple_to_complex_gamma}
+                               'simple_to_complex_gamma' : simple_to_complex_gamma, 'scale_image':scale_image}
 
         print('self.parameter_dict : ',self.parameter_dict)
 
@@ -610,7 +610,7 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
         self.batch_size_per_gpu_val = 128
         self.n_gpus = 8
 
-        self.dataloaders = sensorium_loader_pretrain(self.batch_size_per_gpu_train, self.batch_size_per_gpu_val, self.n_gpus) #dataloaders
+        self.dataloaders = sensorium_loader_pretrain(self.batch_size_per_gpu_train, self.batch_size_per_gpu_val, self.n_gpus, scale_image) #dataloaders
         self.dataloaders = self.dataloaders.dataloaders_train["train"]
 
         self.lr = lr
