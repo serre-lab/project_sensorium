@@ -550,7 +550,8 @@ class InT_Sensorium_Baseline_Direct(pl.LightningModule):
         ###########################
         # Save pred_neural_resp
         self.test_neural_responses = torch.cat(self.test_neural_responses, dim = 0)
-        job_dir = os.path.join("/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/test_neural_responses", self.prj_name)
+        # job_dir = os.path.join("/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/test_neural_responses", self.prj_name)
+        job_dir = os.path.join("/media/data_cifs/projects/prj_sensorium/arjun/test_neural_responses", self.prj_name)
         os.makedirs(job_dir, exist_ok=True)
         file_name = os.path.join(job_dir, "neural_responses.npy")
         np.save(file_name, self.test_neural_responses.numpy())
@@ -590,7 +591,8 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
                  exp_weight, noneg_constraint, visualize_bool = False, dataloaders = None, gaussian_bool = False, \
                  sensorium_ff_bool = False, clamp_weights = False, plot_weights = False, corr_loss = False, \
                  HMAX_bool = False, simple_to_complex = False, n_ori = None, n_scales = None, simple_ff_bool = None, \
-                 simple_to_complex_gamma = False, scale_image = None):
+                 simple_to_complex_gamma = False, scale_image = None, shifter_bool = None, sensorium_plus = None, \
+                 InT_top_down = False, InT_top_down_drew = False, private_inh = False, cifs_bool = False, n_phi = None):
         super().__init__()
         
         self.parameter_dict = {'prj_name':prj_name, 'lr':lr, 'weight_decay':weight_decay, 'n_neurons':n_neurons_list, \
@@ -600,17 +602,19 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
                                'visualize_bool':visualize_bool, 'gaussian_bool':gaussian_bool, 'sensorium_ff_bool':sensorium_ff_bool, \
                                'clamp_weights':clamp_weights, 'plot_weights':plot_weights, 'corr_loss':corr_loss, 'HMAX_bool':HMAX_bool, \
                                'simple_to_complex' : simple_to_complex, 'n_ori':n_ori, 'n_scales':n_scales, 'simple_ff_bool':simple_ff_bool, \
-                               'simple_to_complex_gamma' : simple_to_complex_gamma, 'scale_image':scale_image}
+                               'simple_to_complex_gamma' : simple_to_complex_gamma, 'scale_image':scale_image, 'shifter_bool':shifter_bool, \
+                               'sensorium_plus':sensorium_plus, 'InT_top_down':InT_top_down, 'InT_top_down_drew':InT_top_down_drew, \
+                               'private_inh':private_inh, 'cifs_bool':cifs_bool, 'n_phi':n_phi}
 
         print('self.parameter_dict : ',self.parameter_dict)
 
         self.prj_name = prj_name 
 
-        self.batch_size_per_gpu_train = 32
+        self.batch_size_per_gpu_train = 16 #24
         self.batch_size_per_gpu_val = 128
-        self.n_gpus = 8
+        self.n_gpus = 2
 
-        self.dataloaders = sensorium_loader_pretrain(self.batch_size_per_gpu_train, self.batch_size_per_gpu_val, self.n_gpus, scale_image) #dataloaders
+        self.dataloaders = sensorium_loader_pretrain(self.batch_size_per_gpu_train, self.batch_size_per_gpu_val, self.n_gpus, scale_image, shifter_bool, sensorium_plus, cifs_bool) #dataloaders
         self.dataloaders = self.dataloaders.dataloaders_train["train"]
 
         self.lr = lr
@@ -637,6 +641,11 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
         self.simple_to_complex = simple_to_complex
         self.simple_ff_bool = simple_ff_bool
         self.simple_to_complex_gamma = simple_to_complex_gamma
+        self.shifter_bool = shifter_bool
+        self.sensorium_plus = sensorium_plus
+        self.InT_top_down = InT_top_down
+        self.InT_top_down_drew = InT_top_down_drew
+        self.private_inh = private_inh
 
         if self.batchnorm_bool:
             # self.nl = F.softplus
@@ -660,7 +669,8 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
                                 noneg_constraint = self.noneg_constraint, exp_weight = self.exp_weight, \
                                 orthogonal_init = self.orthogonal_init, freeze_VGG = self.freeze_VGG, \
                                 sensorium_ff_bool = self.sensorium_ff_bool, dataloaders = self.dataloaders, \
-                                HMAX_bool = self.HMAX_bool, n_ori = n_ori, n_scales = n_scales, simple_ff_bool = simple_ff_bool)
+                                HMAX_bool = self.HMAX_bool, n_ori = n_ori, n_scales = n_scales, simple_ff_bool = simple_ff_bool, \
+                                n_phi = n_phi)
         elif self.simple_to_complex:
             layerss = ['S1', 'C1']
             recurrent_circuit_list = []
@@ -673,12 +683,15 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
                                 orthogonal_init = self.orthogonal_init, freeze_VGG = self.freeze_VGG, \
                                 sensorium_ff_bool = self.sensorium_ff_bool, dataloaders = self.dataloaders, \
                                 HMAX_bool = self.HMAX_bool, simple_to_complex = self.simple_to_complex, \
-                                simple_to_complex_layer = layer, n_ori = n_ori, n_scales = n_scales, simple_ff_bool = self.simple_ff_bool)
+                                simple_to_complex_layer = layer, n_ori = n_ori, n_scales = n_scales, \
+                                simple_ff_bool = self.simple_ff_bool, n_phi = n_phi)
                 recurrent_circuit_list.append(temp)
 
             recurrent_circuit = OrderedDict([(layer, recurrent_circuit_list[l_i]) for l_i, layer in enumerate(layerss)])
 
             self.recurrent_circuit = nn.Sequential(recurrent_circuit)
+
+            # self.recurrent_circuit =  nn.ModuleList(recurrent_circuit_list)
 
         elif self.simple_to_complex_gamma:
 
@@ -692,10 +705,32 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
                                 orthogonal_init = self.orthogonal_init, freeze_VGG = self.freeze_VGG, \
                                 sensorium_ff_bool = self.sensorium_ff_bool, dataloaders = self.dataloaders, \
                                 HMAX_bool = self.HMAX_bool, simple_to_complex = self.simple_to_complex, \
-                                n_ori = n_ori, n_scales = n_scales, simple_ff_bool = self.simple_ff_bool)
+                                n_ori = n_ori, n_scales = n_scales, simple_ff_bool = self.simple_ff_bool, \
+                                InT_top_down = self.InT_top_down, InT_top_down_drew = self.InT_top_down_drew, \
+                                private_inh = self.private_inh, n_phi = n_phi)
 
 
-        # print('recurrent_circuit : ',self.recurrent_circuit)
+        print('recurrent_circuit : ',self.recurrent_circuit)
+
+        if self.shifter_bool:
+
+            print('In HEREEEEE shifter_bool')
+
+            input_channels_shifter=2
+            hidden_channels_shifter=5
+            shift_layers=3
+            gamma_shifter=0
+
+            data_keys = [i for i in self.dataloaders.keys()]
+            print('data_keys : ',data_keys)
+            # if shifter_type == "MLP":
+            self.shifter = MLPShifter(
+                data_keys=data_keys,
+                input_channels=input_channels_shifter,
+                hidden_channels_shifter=hidden_channels_shifter,
+                shift_layers=shift_layers,
+                gamma_shifter=gamma_shifter,
+            )
 
             
         if not self.gaussian_bool:    
@@ -744,6 +779,11 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
                     session_shape_dict[k]['images'] = torch.Size([v['images'][0], 3, v['images'][2], v['images'][3]])
                 print('session_shape_dict stacked : ',session_shape_dict)
 
+            # if self.sensorium_plus:
+            #     for k, v in session_shape_dict.items():
+            #         session_shape_dict[k]['images'] = torch.Size([v['images'][0], 4, v['images'][2], v['images'][3]])
+            #     print('session_shape_dict sensorium_plus : ',session_shape_dict)
+
             n_neurons_dict = {k: v[out_name][1] for k, v in session_shape_dict.items()}
             print('n_neurons_dict : ',n_neurons_dict)
             input_channels = [v[in_name][1] for v in session_shape_dict.values()]
@@ -771,6 +811,9 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
             # print('self.gaussian_readout : ',self.gaussian_readout['21067-10-18'])
 
             self.data_idx_to_key = {0: '21067-10-18', 1: '22846-10-16', 2: '23343-5-17', 3: '23656-14-22', 4: '23964-4-22', 5: '26872-17-20'}
+
+            self.data_idx_to_n_neurons = [8372, 7344, 7334, 8107, 8098, 7776]
+            # self.data_idx_to_n_neurons = {'21067-10-18':8372, '22846-10-16':7344, '23343-5-17':7334, '23656-14-22':8107, '23964-4-22':8098, '26872-17-20':7776}
 
         # print(10/0)
 
@@ -819,13 +862,23 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
         dev = torch.device('cuda')
         torch.nn.functional.conv2d(torch.zeros(s, s, s, s, device=dev), torch.zeros(s, s, s, s, device=dev))
 
+    def pad_to_size(self, a, size):
+        current_size = (a.shape[-2], a.shape[-1])
+        total_pad_h = size[0] - current_size[0]
+        pad_top = total_pad_h // 2
+        pad_bottom = total_pad_h - pad_top
 
-    def forward(self, x, regressor_i):
+        total_pad_w = size[1] - current_size[1]
+        pad_left = total_pad_w // 2
+        pad_right = total_pad_w - pad_left
 
-        
-        # # if self.conv_init:
-        # #     self.force_cudnn_initialization()
-        # #     self.conv_init = False
+        a = nn.functional.pad(a, (pad_left, pad_right, pad_top, pad_bottom))
+
+        return a
+
+
+    def forward(self, x, regressor_i, pupil_center = None):
+
         
         recurrent_out = self.recurrent_circuit(x) # , time_steps_exc, time_steps_inh, xbn, weights_to_check
 
@@ -833,7 +886,7 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
 
         if not self.gaussian_bool:
             recurrent_out = F.avg_pool2d(recurrent_out, (recurrent_out.shape[-2], recurrent_out.shape[-1]), 1)
-            recurrent_out = recurrent_out.squeeze()
+            recurrent_out = recurrent_out.squeeze(recurrent_out)
 
             # # recurrent_out = F.max_pool2d(recurrent_out, (2,2), 2)
             # # recurrent_out = recurrent_out.view(recurrent_out.shape[0], -1)
@@ -841,7 +894,22 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
             reg_out = self.regression_list[regressor_i]((recurrent_out))
 
         else:
-            reg_out  = self.gaussian_readout[self.data_idx_to_key[regressor_i]]((recurrent_out))
+            if self.shifter_bool:
+                shift = self.shifter[self.data_idx_to_key[regressor_i]](pupil_center)
+                reg_out  = self.gaussian_readout[self.data_idx_to_key[regressor_i]](recurrent_out, data_key=None, shift=shift)
+            else:
+                reg_out  = self.gaussian_readout[self.data_idx_to_key[regressor_i]]((recurrent_out))
+
+                mu_values = self.gaussian_readout[self.data_idx_to_key[regressor_i]].mu.new(reg_out.shape[0], self.data_idx_to_n_neurons[regressor_i], 1, 2).normal_()
+
+                # print('##################################################')
+                # print('self.gaussian_readout[self.data_idx_to_key[regressor_i]].mu : ',self.gaussian_readout[self.data_idx_to_key[regressor_i]].mu)
+                # print('self.gaussian_readout[self.data_idx_to_key[regressor_i]].mu shape : ',self.gaussian_readout[self.data_idx_to_key[regressor_i]].mu.shape)
+                # print('self.gaussian_readout[self.data_idx_to_key[regressor_i]].mu.new : ',self.gaussian_readout[self.data_idx_to_key[regressor_i]].mu.new(reg_out.shape[0], self.data_idx_to_n_neurons[regressor_i], 1, 2))
+                # print('self.gaussian_readout[self.data_idx_to_key[regressor_i]].mu.new shape : ',self.gaussian_readout[self.data_idx_to_key[regressor_i]].mu.new(reg_out.shape[0], self.data_idx_to_n_neurons[regressor_i], 1, 2).shape)
+                # print('mu_values : ',mu_values)
+                # print('mu_values shape : ',mu_values.shape)
+                # print('##################################################')
 
         # reg_out = F.relu(reg_out)
         reg_out = F.elu(reg_out) + 1
@@ -908,14 +976,32 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
     def training_step(self, batch, batch_idx):
 
         images, target_neural_resp = [], []
+
+        if self.shifter_bool:
+            pupil_centers = []
+        if self.sensorium_plus:
+            behaviour_vars = []
+
         for i in range(len(batch)):
             images.append(batch[i].images)
             target_neural_resp.append(batch[i].responses)
+            if self.shifter_bool:
+                pupil_centers.append(batch[i].pupil_center)
+            if self.sensorium_plus:
+                behaviour_vars.append(batch[i].behavior)
 
         for i in range(len(images)):
             h, w = images[i].shape[-2], images[i].shape[-1]
             if len(images[i].shape) == 4:
-                images[i] = images[i].reshape(-1, 1, h, w)
+                if self.sensorium_plus:
+                    images[i] = images[i].reshape(-1, 4, h, w)
+                else:
+                    images[i] = images[i].reshape(-1, 1, h, w)
+
+                # if self.sensorium_plus:
+                #     cat_behav_vars = behaviour_vars[i][None,:,None,None] * torch.ones_like(images[i])
+                #     images[i] = torch.cat([images[i], cat_behav_vars])
+                    
                 # For getting 3 channels such that we can use with pretrained feefdorward drives
                 if not (self.sensorium_ff_bool or self.HMAX_bool or self.simple_ff_bool):
                     images[i] = torch.cat([images[i], images[i], images[i]], dim = 1)
@@ -929,7 +1015,10 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
         ########################
         pred_neural_resp = []
         for i in range(len(images)):
-            pred_neural_resp.append(self(images[i], i))
+            if self.shifter_bool:
+                pred_neural_resp.append(self(images[i], i, pupil_center = pupil_centers[i]))
+            else:
+                pred_neural_resp.append(self(images[i], i))
 
         ########################
         if not self.corr_loss:
@@ -989,13 +1078,27 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
         
         images, target_neural_resp = batch.images, batch.responses
 
+        if self.shifter_bool:
+            pupil_centers = batch.pupil_center
+
+        if self.sensorium_plus:
+            behaviour_vars = batch.behavior
+
         # print('images : ', images.shape)
         # print('dataset_idx : ', dataset_idx)
         # print('target_neural_resp std: ',torch.std(target_neural_resp, dim = 0), ' :: ',torch.min(target_neural_resp), ' :: ',torch.mean(target_neural_resp))
 
         h, w = images.shape[-2], images.shape[-1]
         if len(images.shape) == 4:
-            images = images.reshape(-1, 1, h, w)
+            if self.sensorium_plus:
+                images = images.reshape(-1, 4, h, w)
+            else:
+                images = images.reshape(-1, 1, h, w)
+
+            # if self.sensorium_plus:
+            #     cat_behav_vars = behaviour_vars[None,:,None,None] * torch.ones_like(images)
+            #     images = torch.cat([images, cat_behav_vars])
+
             # For getting 3 channels such that we can use with pretrained feefdorward drives
             if not (self.sensorium_ff_bool or self.HMAX_bool or self.simple_ff_bool):
                 images = torch.cat([images, images, images], dim = 1)
@@ -1006,7 +1109,10 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
             # if images.shape[0] != 1:
             #         images = images.squeeze()
         ########################
-        pred_neural_resp = self(images, dataset_idx)
+        if self.shifter_bool:
+            pred_neural_resp = self(images, dataset_idx, pupil_center = pupil_centers)
+        else:
+            pred_neural_resp = self(images, dataset_idx)
 
         ########################
         if self.visualize_bool:
@@ -1117,9 +1223,23 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
 
         images, target_neural_resp = batch.images, batch.responses
 
+        if self.shifter_bool:
+            pupil_centers = batch.pupil_center
+
+        if self.sensorium_plus:
+            behaviour_vars = batch.behavior
+
         h, w = images.shape[-2], images.shape[-1]
         if len(images.shape) == 4:
-            images = images.reshape(-1, 1, h, w)
+            if self.sensorium_plus:
+                images = images.reshape(-1, 4, h, w)
+            else:
+                images = images.reshape(-1, 1, h, w)
+
+            # if self.sensorium_plus:
+            #     cat_behav_vars = behaviour_vars[None,:,None,None] * torch.ones_like(images)
+            #     images = torch.cat([images, cat_behav_vars])
+
             # For getting 3 channels such that we can use with pretrained feefdorward drives
             if not (self.sensorium_ff_bool or self.HMAX_bool or self.simple_ff_bool):
                 images = torch.stack([images, images, images], dim = 1)
@@ -1128,8 +1248,12 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
             # target_neural_resp = target_neural_resp.reshape(-1)
 
         ########################
-        pred_neural_resp = self(images, dataset_idx)
-
+        if self.shifter_bool:
+            pred_neural_resp = self(images, dataset_idx, pupil_center = pupil_centers)
+        else:
+            pred_neural_resp = self(images, dataset_idx)
+        
+        self.akash_test_responses = pred_neural_resp
         ###########################
         if dataset_idx == 5:
             # self.test_neural_responses = torch.cat((self.test_neural_responses, pred_neural_resp.cpu()), dim = 0)
@@ -1161,6 +1285,7 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
         ###########################
         # Save pred_neural_resp
         self.test_neural_responses = torch.cat(self.test_neural_responses, dim = 0)
+        # job_dir = os.path.join("/media/data_cifs/projects/prj_sensorium/arjun/test_neural_responses", self.prj_name)
         job_dir = os.path.join("/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/test_neural_responses", self.prj_name)
         os.makedirs(job_dir, exist_ok=True)
         file_name = os.path.join(job_dir, "neural_responses.npy")
@@ -1173,7 +1298,9 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
         losses = self.val_losses
         losses = np.array(losses)
         print('losses : ',losses.shape)
+        print('losses : ',losses)
         losses = np.sum(losses)
+        print('losses sum : ',losses)
 
         #################################
         if losses < self.min_loss:
@@ -1189,7 +1316,8 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
 
         # Reset Parameters
         self.val_losses = []
-        self.test_neural_responses = []
+        # Akash: Stopped resetting to get values
+        # self.test_neural_responses = []
 
     # def test_step(self, batch, batch_idx):
 

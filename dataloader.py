@@ -46,7 +46,7 @@ The datasets 26872-17-20 (Sensorium) 27204-5-13 (Sensorium+) are different from 
 
 
 class sensorium_loader_direct(pl.LightningDataModule):
-    def __init__(self, batch_size_per_gpu, n_gpus, dataset_name = None):
+    def __init__(self, batch_size_per_gpu, n_gpus, dataset_name =  None):
         super().__init__()
           
         # Batch Size
@@ -54,24 +54,24 @@ class sensorium_loader_direct(pl.LightningDataModule):
         
         # Sensorium dataloader
         if dataset_name == None:
-            self.filenames = ['/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static26872-17-20-GrayImageNet-94c6ff995dac583098847cfecd43e7b6']
-            # self.filenames = ['/media/data_cifs/projects/prj_sensorium/arjun/data/static26872-17-20-GrayImageNet-94c6ff995dac583098847cfecd43e7b6']
+            # self.filenames = ['/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static26872-17-20-GrayImageNet-94c6ff995dac583098847cfecd43e7b6']
+            self.filenames = ['/media/data_cifs/projects/prj_sensorium/arjun/data/static26872-17-20-GrayImageNet-94c6ff995dac583098847cfecd43e7b6']
         else:
-            self.filenames = ['/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static21067-10-18-GrayImageNet-94c6ff995dac583098847cfecd43e7b6', 
-                            '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static22846-10-16-GrayImageNet-94c6ff995dac583098847cfecd43e7b6', 
-                            '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static23343-5-17-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
-                            '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static23656-14-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
-                            '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static23964-4-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
-                            '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static26872-17-20-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
-                            '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static27204-5-13-GrayImageNet-94c6ff995dac583098847cfecd43e7b6']
+            # self.filenames = ['/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static21067-10-18-GrayImageNet-94c6ff995dac583098847cfecd43e7b6', 
+            #                 '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static22846-10-16-GrayImageNet-94c6ff995dac583098847cfecd43e7b6', 
+            #                 '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static23343-5-17-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
+            #                 '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static23656-14-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
+            #                 '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static23964-4-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
+            #                 '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static26872-17-20-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
+            #                 '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static27204-5-13-GrayImageNet-94c6ff995dac583098847cfecd43e7b6']
             
-            # self.filenames = ['/media/data_cifs/projects/prj_sensorium/arjun/data/static21067-10-18-GrayImageNet-94c6ff995dac583098847cfecd43e7b6', 
-            #                 '/media/data_cifs/projects/prj_sensorium/arjun/data/static22846-10-16-GrayImageNet-94c6ff995dac583098847cfecd43e7b6', 
-            #                 '/media/data_cifs/projects/prj_sensorium/arjun/data/static23343-5-17-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
-            #                 '/media/data_cifs/projects/prj_sensorium/arjun/data/static23656-14-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
-            #                 '/media/data_cifs/projects/prj_sensorium/arjun/data/static23964-4-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
-            #                 '/media/data_cifs/projects/prj_sensorium/arjun/data/static26872-17-20-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
-            #                 '/media/data_cifs/projects/prj_sensorium/arjun/data/static27204-5-13-GrayImageNet-94c6ff995dac583098847cfecd43e7b6']
+            self.filenames = ['/media/data_cifs/projects/prj_sensorium/arjun/data/static21067-10-18-GrayImageNet-94c6ff995dac583098847cfecd43e7b6', 
+                            '/media/data_cifs/projects/prj_sensorium/arjun/data/static22846-10-16-GrayImageNet-94c6ff995dac583098847cfecd43e7b6', 
+                            '/media/data_cifs/projects/prj_sensorium/arjun/data/static23343-5-17-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
+                            '/media/data_cifs/projects/prj_sensorium/arjun/data/static23656-14-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
+                            '/media/data_cifs/projects/prj_sensorium/arjun/data/static23964-4-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
+                            '/media/data_cifs/projects/prj_sensorium/arjun/data/static26872-17-20-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
+                            '/media/data_cifs/projects/prj_sensorium/arjun/data/static27204-5-13-GrayImageNet-94c6ff995dac583098847cfecd43e7b6']
 
         self.dataset_fn = 'sensorium.datasets.static_loaders'
         # self.dataset_config = {'paths': self.filenames,
@@ -104,7 +104,7 @@ class sensorium_loader_direct(pl.LightningDataModule):
         self.dataloaders = get_data(self.dataset_fn, self.dataset_config)
         print('Got the dataloader')
 
-        self.test_tier = None
+        self.test_tier = "test"
   
     # def setup(self, stage=None):
   
@@ -143,7 +143,7 @@ class sensorium_loader_direct(pl.LightningDataModule):
 
 
 class sensorium_loader_pretrain(pl.LightningDataModule):
-    def __init__(self, batch_size_per_gpu_train, batch_size_per_gpu_val, n_gpus, scale_images):
+    def __init__(self, batch_size_per_gpu_train, batch_size_per_gpu_val, n_gpus, scale_images, shifter_bool = None, sensorium_plus = None, cifs_bool = None):
         super().__init__()
           
         # Batch Size
@@ -152,19 +152,20 @@ class sensorium_loader_pretrain(pl.LightningDataModule):
         self.scale_images = scale_images
         
         # Sensorium dataloader
-        self.filenames = ['/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static21067-10-18-GrayImageNet-94c6ff995dac583098847cfecd43e7b6', 
-            '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static22846-10-16-GrayImageNet-94c6ff995dac583098847cfecd43e7b6', 
-            '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static23343-5-17-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
-            '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static23656-14-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
-            '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static23964-4-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
-            '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static26872-17-20-GrayImageNet-94c6ff995dac583098847cfecd43e7b6']
-
-        # self.filenames = ['/media/data_cifs/projects/prj_sensorium/arjun/data/static21067-10-18-GrayImageNet-94c6ff995dac583098847cfecd43e7b6', 
-        #     '/media/data_cifs/projects/prj_sensorium/arjun/data/static22846-10-16-GrayImageNet-94c6ff995dac583098847cfecd43e7b6', 
-        #     '/media/data_cifs/projects/prj_sensorium/arjun/data/static23343-5-17-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
-        #     '/media/data_cifs/projects/prj_sensorium/arjun/data/static23656-14-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
-        #     '/media/data_cifs/projects/prj_sensorium/arjun/data/static23964-4-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
-        #     '/media/data_cifs/projects/prj_sensorium/arjun/data/static26872-17-20-GrayImageNet-94c6ff995dac583098847cfecd43e7b6']
+        if cifs_bool:
+            self.filenames = ['/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static21067-10-18-GrayImageNet-94c6ff995dac583098847cfecd43e7b6', 
+                '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static22846-10-16-GrayImageNet-94c6ff995dac583098847cfecd43e7b6', 
+                '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static23343-5-17-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
+                '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static23656-14-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
+                '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static23964-4-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
+                '/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/data/static26872-17-20-GrayImageNet-94c6ff995dac583098847cfecd43e7b6']
+        else:
+            self.filenames = ['/media/data_cifs/projects/prj_sensorium/arjun/data/static21067-10-18-GrayImageNet-94c6ff995dac583098847cfecd43e7b6', 
+                '/media/data_cifs/projects/prj_sensorium/arjun/data/static22846-10-16-GrayImageNet-94c6ff995dac583098847cfecd43e7b6', 
+                '/media/data_cifs/projects/prj_sensorium/arjun/data/static23343-5-17-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
+                '/media/data_cifs/projects/prj_sensorium/arjun/data/static23656-14-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
+                '/media/data_cifs/projects/prj_sensorium/arjun/data/static23964-4-22-GrayImageNet-94c6ff995dac583098847cfecd43e7b6',
+                '/media/data_cifs/projects/prj_sensorium/arjun/data/static26872-17-20-GrayImageNet-94c6ff995dac583098847cfecd43e7b6']
 
         self.dataset_fn = 'sensorium.datasets.static_loaders'
         # self.dataset_config = {'paths': self.filenames,
@@ -180,8 +181,8 @@ class sensorium_loader_pretrain(pl.LightningDataModule):
 
         self.dataset_config = {'paths': self.filenames,
                  'normalize': True,
-                 'include_behavior': False,
-                 'include_eye_position': False,
+                 'include_behavior': sensorium_plus,
+                 'include_eye_position': shifter_bool,
                  'batch_size': self.batch_size_train,
                  'scale': self.scale_images,
                  }
@@ -198,9 +199,9 @@ class sensorium_loader_pretrain(pl.LightningDataModule):
         print('Getting the val dataloader')
         self.dataset_config['batch_size'] = self.batch_size_val
         self.dataloaders_val = get_data(self.dataset_fn, self.dataset_config)
-        print('Got the train dataloader')
+        print('Got the val dataloader')
 
-        self.test_tier = None
+        self.test_tier = "test"
   
     # def setup(self, stage=None):
   
@@ -251,14 +252,14 @@ class sensorium_loader_pretrain(pl.LightningDataModule):
             if d_i == 5:
                 self.dataloaders_val[self.test_tier][dataset_name].num_workers = 0
             else:
-                self.dataloaders_val['validation'][dataset_name].num_workers = 0
+                self.dataloaders_val['test'][dataset_name].num_workers = 0
             # Dropping last
             # self.dataloaders['train'][self.dataset_name].multiprocessing_context='spawn'
             
             if d_i == 5:
                 dataloaders_list.append(self.dataloaders_val[self.test_tier][dataset_name])
             else:
-                dataloaders_list.append(self.dataloaders_val['validation'][dataset_name])
+                dataloaders_list.append(self.dataloaders_val['test'][dataset_name])
         
         # Return train_dataloader
         return dataloaders_list

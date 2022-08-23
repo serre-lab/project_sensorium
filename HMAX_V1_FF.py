@@ -10,7 +10,7 @@ def visualize_map(map):
     plt.imshow(map)
 
 
-def get_gabor(l_size, l_div, n_ori, aspect_ratio):
+def get_gabor(l_size, l_div, n_ori, aspect_ratio, n_phi):
     """generate the gabor filters
 
     Args
@@ -47,6 +47,12 @@ def get_gabor(l_size, l_div, n_ori, aspect_ratio):
     # thetas for all gabor orientations
     th = np.array(range(n_ori)) * np.pi / n_ori + np.pi / 2.
     th = th[sp.newaxis, sp.newaxis, :]
+
+    ######################## Phi ########################
+    phi_s = np.array(range(n_phi)) * np.pi / 4 + np.pi / 2.
+    print('phi_s : ',phi_s.shape)
+    # phi_s = phi_s[sp.newaxis, sp.newaxis, :]
+    ######################################################
     hgs = (gs - 1) / 2.
     yy, xx = sp.mgrid[-hgs: hgs + 1, -hgs: hgs + 1]
     xx = xx[:, :, sp.newaxis];
@@ -55,18 +61,38 @@ def get_gabor(l_size, l_div, n_ori, aspect_ratio):
     x = xx * np.cos(th) - yy * np.sin(th)
     y = xx * np.sin(th) + yy * np.cos(th)
 
-    filt = np.exp(-(x ** 2 + (aspect_ratio * y) ** 2) / (2 * si ** 2)) * np.cos(2 * np.pi * x / la)
-    filt[np.sqrt(x ** 2 + y ** 2) > gs / 2.] = 0
+    print('x shape', x.shape)
+    print('y shape', y.shape)
+
+    ######################## No Phi ######################
+    # filt = np.exp(-(x ** 2 + (aspect_ratio * y) ** 2) / (2 * si ** 2)) * np.cos((2 * np.pi * x / la))
+    # filt[np.sqrt(x ** 2 + y ** 2) > gs / 2.] = 0
+    ######################################################
+
+
+    # ######################## Phi ########################
+    filt = []
+    for phi in phi_s:
+        filt_temp = np.exp(-(x ** 2 + (aspect_ratio * y) ** 2) / (2 * si ** 2)) * np.cos((2 * np.pi * x / la) + phi)
+        filt_temp[np.sqrt(x ** 2 + y ** 2) > gs / 2.] = 0
+
+        print('filt_temp : ',filt_temp.shape)
+
+        filt.append(filt_temp)
+
+    filt = np.concatenate(filt, axis = -1)
+
+    ######################################################
 
     # gabor normalization (following cns hmaxgray package)
-    for ori in range(n_ori):
+    for ori in range(n_ori*n_phi):
         filt[:, :, ori] -= filt[:, :, ori].mean()
         filt_norm = fastnorm(filt[:, :, ori])
         if filt_norm != 0: filt[:, :, ori] /= filt_norm
     filt_c = np.array(filt, dtype='float32').swapaxes(0, 2).swapaxes(1, 2)
 
     filt_c = torch.Tensor(filt_c)
-    filt_c = filt_c.view(n_ori, 1, gs, gs)
+    filt_c = filt_c.view(n_ori*n_phi, 1, gs, gs)
     # filt_c = filt_c.repeat((1, 3, 1, 1))
     # filt_c = filt_c.repeat((1, 3, 1, 1))
 
@@ -121,7 +147,7 @@ def pad_to_size(a, size):
 
 class S1(nn.Module):
     # TODO: make more flexible such that forward will accept any number of tensors
-    def __init__(self, scales, n_ori, padding, trainable_filters, divs):
+    def __init__(self, scales, n_ori, padding, trainable_filters, divs, n_phi):
 
         super(S1, self).__init__()
         assert (len(scales) == len(divs))
@@ -129,14 +155,15 @@ class S1(nn.Module):
         self.divs = divs
 
         for scale, div in zip(self.scales, self.divs):
-            setattr(self, f's_{scale}', nn.Conv2d(1, n_ori, scale, padding=padding))
+            # setattr(self, f's_{scale}', nn.Conv2d(1, n_ori, scale, padding=padding))
+            setattr(self, f's_{scale}', nn.Conv2d(1, n_ori*n_phi, scale, padding=padding))
             s1_cell = getattr(self, f's_{scale}')
-            gabor_filter = get_gabor(l_size=scale, l_div=div, n_ori=n_ori, aspect_ratio=0.3)
+            gabor_filter = get_gabor(l_size=scale, l_div=div, n_ori=n_ori, aspect_ratio=0.3, n_phi = n_phi)
             # print('gabor_filter : ',gabor_filter.shape)
             s1_cell.weight = nn.Parameter(gabor_filter, requires_grad=trainable_filters)
 
             # For normalization
-            setattr(self, f's_uniform_{scale}', nn.Conv2d(1, n_ori, scale, bias=False))
+            setattr(self, f's_uniform_{scale}', nn.Conv2d(1, n_ori*n_phi, scale, bias=False))
             s1_uniform = getattr(self, f's_uniform_{scale}')
             nn.init.constant_(s1_uniform.weight, 1)
             for param in s1_uniform.parameters():
@@ -193,6 +220,7 @@ class C(nn.Module):
             self.sp_stride = [1] * self.n_out_sbands
         else:
             self.sp_stride = [int(np.ceil(self.sp_stride_factor * kernel_size)) for kernel_size in self.sp_kernel_size]
+            # self.sp_stride = [int(0.5 + kernel_size/self.sp_kernel_size[0]) for kernel_size in self.sp_kernel_size]
 
     def forward(self, x):
         # TODO - make this whole section more memory efficient
@@ -238,7 +266,8 @@ class HMAX(nn.Module):
                  s1_divs=np.arange(4, 3.1, -0.05),
                  n_ori=8,
                  s1_trainable_filters=False,
-                 n_scales = 9):
+                 n_scales = 9,
+                 n_phi = 1):
         super(HMAX, self).__init__()
 
         # A few settings
@@ -248,6 +277,7 @@ class HMAX(nn.Module):
         self.s1_scales = s1_scales
         self.s1_divs = s1_divs
         self.n_ori = n_ori
+        self.n_phi = n_phi
         self.s1_trainable_filters = s1_trainable_filters
 
         self.c_scale_stride = 1
@@ -258,7 +288,7 @@ class HMAX(nn.Module):
         self.c1_sp_kernel_sizes = get_sp_kernel_sizes_C(self.s1_scales, self.c1_num_scales_pooled, self.c1_scale_stride)
 
         # Feature extractors (in the order of the table in Figure 1)
-        self.s1 = S1(scales=self.s1_scales, n_ori=n_ori, padding='valid', trainable_filters=s1_trainable_filters,
+        self.s1 = S1(scales=self.s1_scales, n_ori=n_ori, n_phi = self.n_phi, padding='valid', trainable_filters=s1_trainable_filters,
                      divs=self.s1_divs)
         self.c1 = C(sp_kernel_size=self.c1_sp_kernel_sizes, sp_stride_factor=0.125, n_in_sbands=len(s1_scales),
                     num_scales_pooled=self.c1_num_scales_pooled, scale_stride=self.c1_scale_stride)

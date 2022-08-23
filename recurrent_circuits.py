@@ -26,6 +26,8 @@ warnings.filterwarnings('ignore')
 
 from HMAX_V1_FF import HMAX
 
+from efficientnet_pytorch import EfficientNet
+
 # Seeds
 import random
 random.seed(1)
@@ -441,7 +443,7 @@ class FFhGRU(nn.Module):
                  num_rbp_steps=10, LCP=0., jv_penalty_weight=0.002, pre_kernel_size = 7, VGG_bool = True, InT_bool = True, \
                  batchnorm_bool = True, noneg_constraint = False, exp_weight = False, orthogonal_init = True, freeze_VGG = False, \
                  sensorium_ff_bool = False, dataloaders = None, HMAX_bool = False, simple_to_complex = False, \
-                 simple_to_complex_layer = None, n_ori = None, n_scales = None, simple_ff_bool = False):
+                 simple_to_complex_layer = None, n_ori = None, n_scales = None, simple_ff_bool = False, n_phi = None):
         '''
         '''
         super(FFhGRU, self).__init__()
@@ -472,40 +474,48 @@ class FFhGRU(nn.Module):
         elif self.simple_ff_bool:
             if self.simple_to_complex:
                 if self.simple_to_complex_layer == 'S1':
-                    conv0 = nn.Conv2d(1, 25, kernel_size=7, padding=7 // 2)
-                    part1 = np.load("/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/gabor_serre.npy")
-                    conv0.weight.data = torch.FloatTensor(part1)
+                    conv0 = nn.Conv2d(1, 25, kernel_size = 9, padding = 9 // 2)
+                    # conv0 = nn.Conv2d(1, 25, kernel_size=7, padding=7 // 2)
+                    # part1 = np.load("/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/gabor_serre.npy")
+                    # conv0.weight.data = torch.FloatTensor(part1)
                     self.preproc = conv0
                     self.hgru_size = 25
                 elif self.simple_to_complex_layer == 'C1':
                     self.preproc = nn.Sequential(
                                                 nn.Conv2d(25, dimensions, kernel_size=pre_kernel_size, stride=1, padding=pre_kernel_size // 2),
                                                 # nn.Conv2d(dimensions, dimensions, kernel_size=pre_kernel_size, stride=1, padding=pre_kernel_size // 2),
-                                                nn.MaxPool2d(2, stride=1))
+                                                nn.MaxPool2d(2, stride=1),
+                                                )
         elif self.HMAX_bool:
             if not self.simple_to_complex:
                 self.preproc = HMAX()
             else:
                 if self.simple_to_complex_layer == 'S1':
-                    preproc = HMAX(n_ori = self.n_ori, n_scales = self.n_scales, s1_trainable_filters = True)
+                    preproc = HMAX(n_ori = self.n_ori, n_scales = self.n_scales, s1_trainable_filters = True, n_phi = n_phi)
                     self.preproc = preproc.s1
-                    self.hgru_size = self.n_ori * self.n_scales
+                    self.hgru_size = self.n_ori * self.n_scales * n_phi
                 elif self.simple_to_complex_layer == 'C1':
-                    preproc = HMAX(n_ori = self.n_ori, n_scales = self.n_scales, s1_trainable_filters = True)
+                    preproc = HMAX(n_ori = self.n_ori, n_scales = self.n_scales, s1_trainable_filters = True, n_phi = n_phi)
                     # self.before_preproc = nn.Conv2d(self.n_ori * self.n_scales, self.n_ori * self.n_scales, kernel_size=pre_kernel_size, stride=1, padding=pre_kernel_size // 2)
                     self.preproc = preproc.c1
-                    self.hgru_size = self.n_ori * (self.n_scales-1)
+                    self.hgru_size = self.n_ori * (self.n_scales-1) * n_phi
         elif VGG_bool:
-            pretrained_features = models.vgg16(pretrained=True).features
+            # pretrained_features = models.vgg16(pretrained=True).features
             # pretrained_features = models.alexnet(pretrained=True).features
-            # pretrained_features = models.squeezenet1_1(pretrained=True).features
+            pretrained_features = models.squeezenet1_1(pretrained=True).features
+            # pretrained_features = models.resnet18(pretrained=True) #.features
+            # pretrained_features = EfficientNet.from_pretrained('efficientnet-b0')
+            # pretrained_features = torch.nn.Sequential(*(list(pretrained_features.children())))
 
             # pretrained_features
             # print(pretrained_features)
             preproc = torch.nn.Sequential()
-            for x in range(10): # VGG-16
+            # for x in range(10): # VGG-16
             # for x in range(6): # SQZN
+            for x in range(5): # SQZN
             # for x in range(5): # AlexNet
+            # for x in range(6): # ResNET-18
+            # for x in range(5): # ResNET-18
                 print(pretrained_features[x])
                 # if x in [4,9]:
                 #     max_pool_3_1 = torch.nn.MaxPool2d(kernel_size=3, stride=1, padding=0, dilation=1, ceil_mode=False)
@@ -539,9 +549,9 @@ class FFhGRU(nn.Module):
 
             # Hyper-Parameters
             hidden_channels=self.hgru_size
-            input_kern=9
+            input_kern=7
             hidden_kern=7
-            layers=4
+            layers=2
             gamma_input=6.3831
             skip=0
             final_nonlinearity=True
@@ -629,7 +639,7 @@ class FFhGRU(nn.Module):
             if self.simple_to_complex_layer == 'C1':
                 # x = self.before_preproc(x)
                 # Bx(C*S)xHxW ---> BxCxSxHxW ---> BxCxHxWxS 
-                x = x.reshape(x.shape[0], self.n_ori, self.n_scales, x.shape[2], x.shape[3])
+                x = x.reshape(x.shape[0], self.n_ori*self.n_phi, self.n_scales, x.shape[2], x.shape[3])
                 x = x.permute(0,1,3,4,2)
             # BxCxHxWxS ---> Bx(C*S)xHxW
             xbn = self.preproc(x)
@@ -718,6 +728,20 @@ class FFhGRU(nn.Module):
         return excitation #, time_steps_exc, time_steps_inh, xbn, weights_to_check
 
 
+def pad_to_size(a, size):
+    current_size = (a.shape[-2], a.shape[-1])
+    total_pad_h = size[0] - current_size[0]
+    pad_top = total_pad_h // 2
+    pad_bottom = total_pad_h - pad_top
+
+    total_pad_w = size[1] - current_size[1]
+    pad_left = total_pad_w // 2
+    pad_right = total_pad_w - pad_left
+
+    a = nn.functional.pad(a, (pad_left, pad_right, pad_top, pad_bottom))
+
+    return a
+
 class FFhGRU_gamma(nn.Module):
 
     def __init__(self, dimensions = 25, input_size=3, timesteps=8, kernel_size=15, jacobian_penalty=False, grad_method='bptt', no_inh=False, \
@@ -725,7 +749,8 @@ class FFhGRU_gamma(nn.Module):
                  num_rbp_steps=10, LCP=0., jv_penalty_weight=0.002, pre_kernel_size = 7, VGG_bool = True, InT_bool = True, \
                  batchnorm_bool = True, noneg_constraint = False, exp_weight = False, orthogonal_init = True, freeze_VGG = False, \
                  sensorium_ff_bool = False, dataloaders = None, HMAX_bool = False, simple_to_complex = False, \
-                 simple_to_complex_layer = None, n_ori = None, n_scales = None, simple_ff_bool = False):
+                 simple_to_complex_layer = None, n_ori = None, n_scales = None, simple_ff_bool = False, \
+                 InT_top_down = False, InT_top_down_drew = False, private_inh = False, n_phi = None):
         '''
         '''
         super(FFhGRU_gamma, self).__init__()
@@ -746,7 +771,16 @@ class FFhGRU_gamma(nn.Module):
         self.simple_to_complex_layer = simple_to_complex_layer
         self.n_ori = n_ori
         self.n_scales = n_scales
+        self.n_phi = n_phi
         self.simple_ff_bool = simple_ff_bool
+        self.InT_top_down = InT_top_down
+        self.InT_top_down_drew = InT_top_down_drew
+        self.private_inh = private_inh
+
+        print('InT_top_down : ',self.InT_top_down)
+        print('InT_top_down_drew : ',self.InT_top_down_drew)
+        print('private_inh : ',self.private_inh)
+
         self.LCP = LCP
         self.jv_penalty_weight = jv_penalty_weight
         if l1 > 0:
@@ -754,31 +788,39 @@ class FFhGRU_gamma(nn.Module):
         elif not(VGG_bool or sensorium_ff_bool or HMAX_bool or simple_ff_bool):
             self.preproc = nn.Conv2d(1, dimensions, kernel_size=pre_kernel_size, stride=1, padding=pre_kernel_size // 2)
         elif self.simple_ff_bool:
-            if self.simple_to_complex:
-                if self.simple_to_complex_layer == 'S1':
-                    conv0 = nn.Conv2d(1, 25, kernel_size=7, padding=7 // 2)
-                    part1 = np.load("/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/gabor_serre.npy")
-                    conv0.weight.data = torch.FloatTensor(part1)
-                    self.preproc = conv0
-                    self.hgru_size = 25
-                elif self.simple_to_complex_layer == 'C1':
-                    self.preproc = nn.Sequential(
-                                                nn.Conv2d(25, dimensions, kernel_size=pre_kernel_size, stride=1, padding=pre_kernel_size // 2),
-                                                # nn.Conv2d(dimensions, dimensions, kernel_size=pre_kernel_size, stride=1, padding=pre_kernel_size // 2),
-                                                nn.MaxPool2d(2, stride=1))
+            # if self.simple_to_complex:
+            # if self.simple_to_complex_layer == 'S1':
+            # conv0 = nn.Conv2d(1, 25, kernel_size = 9, padding = 9 // 2)
+            conv0 = nn.Conv2d(1, 25, kernel_size=7, padding=7 // 2)
+            
+            # Gabor
+            part1 = np.load("/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/arjun/gabor_serre.npy")
+            conv0.weight.data = torch.FloatTensor(part1)
+
+            self.preproc_s1 = conv0
+
+            self.hgru_size_s1 = 25
+            # elif self.simple_to_complex_layer == 'C1':
+            self.preproc_c1 = nn.Sequential(
+                                        nn.Conv2d(25, dimensions, kernel_size=pre_kernel_size, stride=1, padding=pre_kernel_size // 2),
+                                        # nn.Conv2d(dimensions, dimensions, kernel_size=pre_kernel_size, stride=1, padding=pre_kernel_size // 2),
+                                        nn.MaxPool2d(2, stride=1) #, padding=2 // 2),
+                                        )
+            self.hgru_size_c1 = dimensions
         elif self.HMAX_bool:
             # if not self.simple_to_complex:
             #     self.preproc = HMAX()
             # else:
             # if self.simple_to_complex_layer == 'S1':
-            preproc = HMAX(n_ori = self.n_ori, n_scales = self.n_scales, s1_trainable_filters = True)
+            preproc = HMAX(n_ori = self.n_ori, n_scales = self.n_scales, s1_trainable_filters = True, n_phi = n_phi)
             self.preproc_s1 = preproc.s1
-            self.hgru_size_s1 = self.n_ori * self.n_scales
+            self.hgru_size_s1 = self.n_ori * self.n_scales * n_phi
             # elif self.simple_to_complex_layer == 'C1':
             # preproc = HMAX(n_ori = self.n_ori, n_scales = self.n_scales, s1_trainable_filters = True)
             # self.before_preproc = nn.Conv2d(self.n_ori * self.n_scales, self.n_ori * self.n_scales, kernel_size=pre_kernel_size, stride=1, padding=pre_kernel_size // 2)
             self.preproc_c1 = preproc.c1
-            self.hgru_size_c1 = self.n_ori * (self.n_scales-1)
+            self.post_preproc_c1 = nn.Conv2d(self.n_ori * (self.n_scales-1) * n_phi, self.n_ori * self.n_scales * n_phi, kernel_size=1, stride=1)
+            self.hgru_size_c1 =  self.n_ori * self.n_scales * n_phi #self.n_ori * (self.n_scales-1)
         elif VGG_bool:
             vgg_pretrained_features = models.vgg16(pretrained=True).features
             # vgg_pretrained_features = models.squeezenet1_1(pretrained=True).features
@@ -892,39 +934,64 @@ class FFhGRU_gamma(nn.Module):
                 lesion_kappa=lesion_kappa,
                 timesteps=timesteps)
 
-            self.unit_c1 = hConvGRUCell(
-                # input_size=input_size,
-                hidden_size=self.hgru_size_c1,
-                kernel_size=kernel_size,
-                use_attention=False,
-                no_inh=no_inh,
-                batchnorm_bool = self.batchnorm_bool,
-                noneg_constraint = self.noneg_constraint,
-                exp_weight = self.exp_weight,
-                orthogonal_init = self.orthogonal_init,
-                # l1=l1,
-                lesion_alpha=lesion_alpha,
-                lesion_mu=lesion_mu,
-                lesion_gamma=lesion_gamma,
-                lesion_kappa=lesion_kappa,
-                timesteps=timesteps)
+            ######################### No TOP DOWN ####################################
 
-            # self.unit_sc1 = hConvGRUCell(
-            #     # input_size=input_size,
-            #     hidden_size=self.hgru_size_c1,
-            #     kernel_size=kernel_size,
-            #     use_attention=False,
-            #     no_inh=no_inh,
-            #     batchnorm_bool = self.batchnorm_bool,
-            #     noneg_constraint = self.noneg_constraint,
-            #     exp_weight = self.exp_weight,
-            #     orthogonal_init = self.orthogonal_init,
-            #     # l1=l1,
-            #     lesion_alpha=lesion_alpha,
-            #     lesion_mu=lesion_mu,
-            #     lesion_gamma=lesion_gamma,
-            #     lesion_kappa=lesion_kappa,
-            #     timesteps=timesteps)
+            if not self.InT_top_down:
+                self.unit_c1 = hConvGRUCell(
+                    # input_size=input_size,
+                    hidden_size=self.hgru_size_c1,
+                    kernel_size=kernel_size,
+                    use_attention=False,
+                    no_inh=no_inh,
+                    batchnorm_bool = self.batchnorm_bool,
+                    noneg_constraint = self.noneg_constraint,
+                    exp_weight = self.exp_weight,
+                    orthogonal_init = self.orthogonal_init,
+                    # l1=l1,
+                    lesion_alpha=lesion_alpha,
+                    lesion_mu=lesion_mu,
+                    lesion_gamma=lesion_gamma,
+                    lesion_kappa=lesion_kappa,
+                    timesteps=timesteps)
+
+            ######################### TOP DOWN ####################################
+
+            else:
+
+                if self.InT_top_down_drew:
+                    self.unit_c1_to_s1 = hConvGRUCell(
+                        # input_size=input_size,
+                        hidden_size=self.hgru_size_c1,
+                        kernel_size=kernel_size,
+                        use_attention=False,
+                        no_inh=no_inh,
+                        batchnorm_bool = self.batchnorm_bool,
+                        noneg_constraint = self.noneg_constraint,
+                        exp_weight = self.exp_weight,
+                        orthogonal_init = self.orthogonal_init,
+                        # l1=l1,
+                        lesion_alpha=lesion_alpha,
+                        lesion_mu=lesion_mu,
+                        lesion_gamma=lesion_gamma,
+                        lesion_kappa=lesion_kappa,
+                        timesteps=timesteps)
+
+                self.unit_sc1 = hConvGRUCell(
+                    # input_size=input_size,
+                    hidden_size=self.hgru_size_c1,
+                    kernel_size=kernel_size,
+                    use_attention=False,
+                    no_inh=no_inh,
+                    batchnorm_bool = self.batchnorm_bool,
+                    noneg_constraint = self.noneg_constraint,
+                    exp_weight = self.exp_weight,
+                    orthogonal_init = self.orthogonal_init,
+                    # l1=l1,
+                    lesion_alpha=lesion_alpha,
+                    lesion_mu=lesion_mu,
+                    lesion_gamma=lesion_gamma,
+                    lesion_kappa=lesion_kappa,
+                    timesteps=timesteps)
 
         else:
             self.unit1 = hConvGRUCell_org(
@@ -986,21 +1053,36 @@ class FFhGRU_gamma(nn.Module):
         if self.grad_method == "bptt":
             excitation_s1_sc = None
             inhibition_s1_sc = None
+            excitation_s1 = None
+            excitation_c1 = None
             for t in range(self.timesteps):
                 if self.InT_bool:
                     # S1
                     s1_cells = self.preproc_s1(x)
-                    s1_cells = s1_cells.permute(0,1,4,2,3)
-                    s1_cells = s1_cells.reshape(s1_cells.shape[0], -1, s1_cells.shape[3], s1_cells.shape[4])
+
+                    if self.HMAX_bool:
+                        s1_cells = s1_cells.permute(0,1,4,2,3)
+                        s1_cells = s1_cells.reshape(s1_cells.shape[0], -1, s1_cells.shape[3], s1_cells.shape[4])
+
                     s1_cells = self.nl(s1_cells)
 
                     if t == 0:
                         s1_shape = s1_cells.shape 
                         excitation_s1 = torch.zeros((s1_shape[0], s1_shape[1], s1_shape[2], s1_shape[3]), requires_grad=False).to(x.device)
                         inhibition_s1 = torch.zeros((s1_shape[0], s1_shape[1], s1_shape[2], s1_shape[3]), requires_grad=False).to(x.device)
-                    # else:
-                    #     excitation_s1 = excitation_s1_sc
-                    #     inhibition_s1 = inhibition_s1_sc
+                    ######################### TOP DOWN ####################################
+                    elif self.InT_top_down:
+                        if self.InT_top_down_drew:
+                            excitation_s1 = excitation_s1_sc
+                            if not self.private_inh:
+                                inhibition_s1 = inhibition_s1_sc
+
+                        else:
+                            excitation_s1 = excitation_s1_sc
+                            if not self.private_inh:
+                                inhibition_s1 = inhibition_s1_sc
+
+                        # self.private_inh
 
                     out_s1 = self.unit_s1(
                         input_=s1_cells,
@@ -1008,51 +1090,109 @@ class FFhGRU_gamma(nn.Module):
                         excitation=excitation_s1,
                         activ=self.nl,
                         testmode=testmode,
-                        t_i = t)
+                        t_i = t)   
 
                     inhibition_s1, excitation_s1, weights_to_check_s1 = out_s1
 
                     # C1
-                    c1_cells = excitation_s1.reshape(excitation_s1.shape[0], self.n_ori, self.n_scales, excitation_s1.shape[2], excitation_s1.shape[3])
-                    c1_cells = c1_cells.permute(0,1,3,4,2)
+                    if self.HMAX_bool:
+                        c1_cells = excitation_s1.reshape(excitation_s1.shape[0], self.n_ori*self.n_phi, self.n_scales, excitation_s1.shape[2], excitation_s1.shape[3])
+                        c1_cells = c1_cells.permute(0,1,3,4,2)
+                    else:
+                        c1_cells = excitation_s1
+
                     c1_cells = self.preproc_c1(c1_cells)
-                    c1_cells = c1_cells.permute(0,1,4,2,3)
-                    c1_cells = c1_cells.reshape(c1_cells.shape[0], -1, c1_cells.shape[3], c1_cells.shape[4])
+
+                    if self.HMAX_bool:
+                        c1_cells = c1_cells.permute(0,1,4,2,3)
+                        c1_cells = c1_cells.reshape(c1_cells.shape[0], -1, c1_cells.shape[3], c1_cells.shape[4])
+
+                        # post prepoc for HMAX which enables top down
+                        c1_cells = self.post_preproc_c1(c1_cells)
+
                     c1_cells = self.nl(c1_cells)
 
-                    if t == 0:
-                        c1_shape = c1_cells.shape
-                        excitation_c1 = torch.zeros((c1_shape[0], c1_shape[1], c1_shape[2], c1_shape[3]), requires_grad=False).to(x.device)
-                        inhibition_c1 = torch.zeros((c1_shape[0], c1_shape[1], c1_shape[2], c1_shape[3]), requires_grad=False).to(x.device)
+                    # ######################### No TOP DOWN ####################################
 
-                    out_c1 = self.unit_c1(
-                        input_=c1_cells,
-                        inhibition=inhibition_c1,
-                        excitation=excitation_c1,
-                        activ=self.nl,
-                        testmode=testmode,
-                        t_i = t)
+                    if not self.InT_top_down:
+                        if t == 0:
+                            c1_shape = c1_cells.shape
+                            excitation_c1 = torch.zeros((c1_shape[0], c1_shape[1], c1_shape[2], c1_shape[3]), requires_grad=False).to(x.device)
+                            inhibition_c1 = torch.zeros((c1_shape[0], c1_shape[1], c1_shape[2], c1_shape[3]), requires_grad=False).to(x.device)
 
-                    inhibition_c1, excitation_c1, weights_to_check_c1 = out_c1
+                        out_c1 = self.unit_c1(
+                            input_=c1_cells,
+                            inhibition=inhibition_c1,
+                            excitation=excitation_c1,
+                            activ=self.nl,
+                            testmode=testmode,
+                            t_i = t)
 
-                    # SC1
-                    # excitation_sc1 = excitation_s1
-                    # inhibition_sc1 = inhibition_s1
+                        inhibition_c1, excitation_c1, weights_to_check_c1 = out_c1
 
-                    # c1_cells = F.interpolate(c1_cells,(excitation_s1.shape[2], excitation_s1.shape[3]), mode='bilinear',align_corners=True)
+                    ######################### TOP DOWN ####################################
 
-                    # out_sc1 = self.unit_sc1(
-                    #     input_=c1_cells,
-                    #     inhibition=inhibition_sc1,
-                    #     excitation=excitation_sc1,
-                    #     activ=self.nl,
-                    #     testmode=testmode,
-                    #     t_i = t)
+                    else:
 
-                    # inhibition_sc1, excitation_sc1, weights_to_check_sc1 = out_sc1
+                        if self.private_inh:
+                            excitation_sc1 = excitation_s1
+                            if t == 0:
+                                c1_shape = c1_cells.shape
+                                inhibition_sc1 = torch.zeros((c1_shape[0], c1_shape[1], c1_shape[2], c1_shape[3]), requires_grad=False).to(x.device)
 
-                    # excitation_s1_sc = excitation_sc1
-                    # inhibition_s1_sc = inhibition_sc1
+                            # # SC1
+                            # excitation_sc1 = excitation_s1
+                            # inhibition_sc1 = inhibition_s1
+                        else:
+                            # SC1
+                            excitation_sc1 = excitation_s1
+                            inhibition_sc1 = inhibition_s1
+
+                        c1_cells = F.interpolate(c1_cells,(excitation_s1.shape[2], excitation_s1.shape[3]), mode='bilinear',align_corners=True)
+                        # c1_cells = pad_to_size(c1_cells, (excitation_s1.shape[2], excitation_s1.shape[3]))
+
+                        out_sc1 = self.unit_sc1(
+                            input_=c1_cells,
+                            inhibition=inhibition_sc1,
+                            excitation=excitation_sc1,
+                            activ=self.nl,
+                            testmode=testmode,
+                            t_i = t)
+
+                        inhibition_sc1, excitation_sc1, weights_to_check_sc1 = out_sc1
+
+                        if self.InT_top_down_drew:
+
+                            if self.private_inh:
+                                excitation_c1_to_s1 = excitation_sc1
+                                if t == 0:
+                                    c1_shape = c1_cells.shape
+                                    inhibition_c1_to_s1 = torch.zeros((c1_shape[0], c1_shape[1], c1_shape[2], c1_shape[3]), requires_grad=False).to(x.device)
+
+                                # # C1 To S1
+                                # excitation_c1_to_s1 = excitation_sc1
+                                # inhibition_c1_to_s1 = inhibition_sc1
+                            else:
+                                # C1 To S1
+                                excitation_c1_to_s1 = excitation_sc1
+                                inhibition_c1_to_s1 = inhibition_sc1
+
+                            out_c1_to_s1 = self.unit_c1_to_s1(
+                                            input_=excitation_s1,
+                                            inhibition=inhibition_c1_to_s1,
+                                            excitation=excitation_c1_to_s1,
+                                            activ=self.nl,
+                                            testmode=testmode,
+                                            t_i = t)
+
+                            inhibition_c1_to_s1, excitation_c1_to_s1, weights_to_check_c1_to_s1 = out_c1_to_s1
+
+                            excitation_s1_sc = excitation_c1_to_s1
+                            inhibition_s1_sc = inhibition_c1_to_s1
+
+                        else:
+                            excitation_s1_sc = excitation_sc1
+                            inhibition_s1_sc = inhibition_sc1
 
 
                 else:
@@ -1099,7 +1239,18 @@ class FFhGRU_gamma(nn.Module):
 
         
 
-        return excitation_c1 #, time_steps_exc, time_steps_inh, xbn, weights_to_check
+        ######################### No TOP DOWN ####################################
+        if not self.InT_top_down:
+            return excitation_c1 #, time_steps_exc, time_steps_inh, xbn, weights_to_check
+
+            # excitation_c1 = F.interpolate(excitation_c1,(excitation_s1.shape[2], excitation_s1.shape[3]), mode='bilinear',align_corners=True)
+            # return torch.cat([excitation_s1, excitation_c1], dim = 1)
+        ######################### TOP DOWN ####################################
+        else:
+            # return excitation_s1
+            # return excitation_sc1
+            return torch.cat([excitation_s1, excitation_sc1], dim = 1)
+            # return torch.cat([excitation_s1, excitation_sc1, inhibition_c1_to_s1], dim = 1)
 
 ################################################################################################################################
 ################################################################################################################################
