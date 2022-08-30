@@ -156,6 +156,8 @@ if __name__ == '__main__':
 
     cifs_bool = config[username].getboolean('cifs_bool')
 
+    rdm_corr = config[username].getboolean('rdm_corr')
+
     n_phi = 4 #config[username].getint("n_phi")
 
     # dataset_names = ['21067-10-18', '22846-10-16', '23343-5-17', '23656-14-22', '23964-4-22']
@@ -190,10 +192,10 @@ if __name__ == '__main__':
                     exp_weight, noneg_constraint, visualize_bool, data.dataloaders_train["train"], \
                     gaussian_bool, sensorium_ff_bool, clamp_weights, plot_weights, corr_loss, HMAX_bool, \
                     simple_to_complex, n_ori, n_scales, simple_ff_bool, simple_to_complex_gamma, scale_image, \
-                    shifter_bool, sensorium_plus, InT_top_down, InT_top_down_drew, private_inh, cifs_bool, n_phi)
+                    shifter_bool, sensorium_plus, InT_top_down, InT_top_down_drew, private_inh, cifs_bool, n_phi, rdm_corr)
 
     if test_mode or val_mode or continue_training:
-        model = model.load_from_checkpoint('/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/'+username+'/checkpoints/' + prj_name + '/sensorium-epoch=3-val_corr=0.32362231612205505-val_loss=13685917.0.ckpt')
+        model = model.load_from_checkpoint('/cifs/data/tserre/CLPS_Serre_Lab/projects/prj_sensorium/'+username+'/checkpoints/' + prj_name + '/sensorium-epoch=3-val_corr=0.3170104920864105-val_loss=13758832.6640625.ckpt')
 
         print('Loaded Checkpoint')
 
@@ -253,7 +255,7 @@ if __name__ == '__main__':
     # # log gradients, parameter histogram and model topology
     # wandb_logger.watch(model, log="all")
     
-    trainer = pl.Trainer(max_epochs = num_epochs, gpus=-1, accelerator = 'dp', callbacks = [checkpoint_callback]) #, gradient_clip_val= 0.5, \
+    trainer = pl.Trainer(max_epochs = num_epochs, devices=n_gpus, accelerator = 'gpu', strategy = 'dp', callbacks = [checkpoint_callback]) #, gradient_clip_val= 0.5, \
                                                 # gradient_clip_algorithm="value") #, logger = wandb_logger)
     # Train
     if not(test_mode or val_mode):

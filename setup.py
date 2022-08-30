@@ -34,6 +34,8 @@ import pytorch_lightning as pl
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import WandbLogger
 
+from torchmetrics import SpearmanCorrCoef
+
 import wandb
 
 import scipy as sp
@@ -54,6 +56,8 @@ random.seed(1)
 
 from recurrent_circuits import FFhGRU, FFhGRU_gamma
 from sensorium.utility import plotting
+
+from sensorium.utility import calc_similarity
 
 from sensorium.models.utility import prepare_grid
 from sensorium.models.readouts import MultipleFullGaussian2d
@@ -101,7 +105,7 @@ def corr(
 
 
 def corr_tensor(
-    y1, y2, axis, eps = 1e-8):
+    y1, y2, axis = 1, eps = 1e-8):
     """
     Compute the correlation between two NumPy arrays along the specified dimension(s).
     Args:
@@ -113,8 +117,19 @@ def corr_tensor(
     Returns: correlation array
     """
 
+    if len(y1.shape) == 1 and len(y2.shape) == 1:
+        y1 = y1.reshape(1,-1)
+        y2 = y2.reshape(1,-1)
+
+    # print('y÷2 : ',y2.shape)
+
     y1 = (y1 - y1.mean(dim=axis, keepdim=True)) / (y1.std(dim=axis, keepdim=True) + eps)
     y2 = (y2 - y2.mean(dim=axis, keepdim=True)) / (y2.std(dim=axis, keepdim=True) + eps)
+
+    # print('y1 : ',y1.shape)
+    # print('y2  ',y2.shape)
+    # print('(y1 * y2).mean(dim=axis) : ',(y1 * y2).mean(dim=axis).shape)
+    
     return (y1 * y2).mean(dim=axis)
 
 ####################################################
@@ -592,7 +607,8 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
                  sensorium_ff_bool = False, clamp_weights = False, plot_weights = False, corr_loss = False, \
                  HMAX_bool = False, simple_to_complex = False, n_ori = None, n_scales = None, simple_ff_bool = None, \
                  simple_to_complex_gamma = False, scale_image = None, shifter_bool = None, sensorium_plus = None, \
-                 InT_top_down = False, InT_top_down_drew = False, private_inh = False, cifs_bool = False, n_phi = None):
+                 InT_top_down = False, InT_top_down_drew = False, private_inh = False, cifs_bool = False, n_phi = None, \
+                 rdm_corr = False):
         super().__init__()
         
         self.parameter_dict = {'prj_name':prj_name, 'lr':lr, 'weight_decay':weight_decay, 'n_neurons':n_neurons_list, \
@@ -604,13 +620,13 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
                                'simple_to_complex' : simple_to_complex, 'n_ori':n_ori, 'n_scales':n_scales, 'simple_ff_bool':simple_ff_bool, \
                                'simple_to_complex_gamma' : simple_to_complex_gamma, 'scale_image':scale_image, 'shifter_bool':shifter_bool, \
                                'sensorium_plus':sensorium_plus, 'InT_top_down':InT_top_down, 'InT_top_down_drew':InT_top_down_drew, \
-                               'private_inh':private_inh, 'cifs_bool':cifs_bool, 'n_phi':n_phi}
+                               'private_inh':private_inh, 'cifs_bool':cifs_bool, 'n_phi':n_phi, 'rdm_corr':rdm_corr}
 
         print('self.parameter_dict : ',self.parameter_dict)
 
         self.prj_name = prj_name 
 
-        self.batch_size_per_gpu_train = 16 #24
+        self.batch_size_per_gpu_train = 16 #16 #24
         self.batch_size_per_gpu_val = 128
         self.n_gpus = 2
 
@@ -646,6 +662,7 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
         self.InT_top_down = InT_top_down
         self.InT_top_down_drew = InT_top_down_drew
         self.private_inh = private_inh
+        self.rdm_corr = rdm_corr
 
         if self.batchnorm_bool:
             # self.nl = F.softplus
@@ -792,6 +809,7 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
             print('in_shapes_dict : ',in_shapes_dict)
 
             grid_mean_predictor, grid_mean_predictor_type, source_grids = prepare_grid(grid_mean_predictor, self.dataloaders)
+            self.source_grids = source_grids
 
             print('source_grids : ',source_grids['21067-10-18'].shape)
 
@@ -827,6 +845,14 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
                             'recurrent_circuit.unit1.mu' : 0.5, 'recurrent_circuit.unit1.alpha' : 0.5, 'recurrent_circuit.unit1.i_w_gate.weight' : 0.5, 'recurrent_circuit.unit1.i_u_gate.weight' : 0.5, \
                             'recurrent_circuit.unit1.e_w_gate.weight' : 0.5, 'recurrent_circuit.unit1.e_u_gate.weight' : 0.5}
 
+        # # For mapping from mu_rdm to source_rdm space
+        # self.linear_rdms = nn.Linear(32, 3)
+
+        # For mapping from mu_xy to source_xy space for calculating rdms
+        self.linear_xy_1 = nn.ModuleList([nn.Linear(2, 30) for _ in range(len(self.data_idx_to_n_neurons))])
+        self.linear_xy_2 = nn.ModuleList([nn.Linear(30, 2) for _ in range(len(self.data_idx_to_n_neurons))])
+
+        
         if self.plot_weights:
             ncount = 0
             for name, param in self.named_parameters():
@@ -877,7 +903,10 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
         return a
 
 
-    def forward(self, x, regressor_i, pupil_center = None):
+    def forward(self, x, regressor_i, pupil_center = None, train_bool = False):
+
+        spearman_x = 0
+        spearman_y = 0
 
         
         recurrent_out = self.recurrent_circuit(x) # , time_steps_exc, time_steps_inh, xbn, weights_to_check
@@ -900,22 +929,101 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
             else:
                 reg_out  = self.gaussian_readout[self.data_idx_to_key[regressor_i]]((recurrent_out))
 
-                mu_values = self.gaussian_readout[self.data_idx_to_key[regressor_i]].mu.new(reg_out.shape[0], self.data_idx_to_n_neurons[regressor_i], 1, 2).normal_()
+                ###################################
+                if self.rdm_corr:
+                    ##################################################
+                    # Get (x,y) coordinates
+                    if train_bool:
+                        mu_norm = self.gaussian_readout[self.data_idx_to_key[regressor_i]].mu.new(reg_out.shape[0], self.data_idx_to_n_neurons[regressor_i], 1, 2).normal_()
+                    else:
+                        mu_norm = self.gaussian_readout[self.data_idx_to_key[regressor_i]].mu.new(reg_out.shape[0], self.data_idx_to_n_neurons[regressor_i], 1, 2).zero_()
 
-                # print('##################################################')
-                # print('self.gaussian_readout[self.data_idx_to_key[regressor_i]].mu : ',self.gaussian_readout[self.data_idx_to_key[regressor_i]].mu)
-                # print('self.gaussian_readout[self.data_idx_to_key[regressor_i]].mu shape : ',self.gaussian_readout[self.data_idx_to_key[regressor_i]].mu.shape)
-                # print('self.gaussian_readout[self.data_idx_to_key[regressor_i]].mu.new : ',self.gaussian_readout[self.data_idx_to_key[regressor_i]].mu.new(reg_out.shape[0], self.data_idx_to_n_neurons[regressor_i], 1, 2))
-                # print('self.gaussian_readout[self.data_idx_to_key[regressor_i]].mu.new shape : ',self.gaussian_readout[self.data_idx_to_key[regressor_i]].mu.new(reg_out.shape[0], self.data_idx_to_n_neurons[regressor_i], 1, 2).shape)
-                # print('mu_values : ',mu_values)
-                # print('mu_values shape : ',mu_values.shape)
-                # print('##################################################')
+                    mu_sigma = self.gaussian_readout[self.data_idx_to_key[regressor_i]].sigma
+                    mu_mu = self.gaussian_readout[self.data_idx_to_key[regressor_i]].mu
+
+                    mu_values = torch.clamp(
+                        torch.einsum("ancd,bnid->bnic", mu_sigma, mu_norm) + mu_mu,
+                        min=-1,
+                        max=1,
+                    )  # grid locations in feature space sampled randomly around the mean self.mu
+                    
+                    if mu_values.shape[0] != 1:
+                        mu_values = mu_values.squeeze()
+
+                    ##################################################
+                    source_grids = torch.from_numpy(self.source_grids[self.data_idx_to_key[regressor_i]].astype(np.float32)).cuda()
+                    source_values = source_grids
+                    source_values = source_values.squeeze()
+
+                    ##################################################
+                    # Calc RDMs
+                    # print('Starting to calc RDM')
+                    # mu_x_rdm = []
+                    # mu_y_rdm = []
+                    # for mu_batch in mu_values:
+                    #     mu_x_rdm.append(calc_similarity.calc_rdms_torch(mu_batch[:,0:1]))
+                    #     mu_y_rdm.append(calc_similarity.calc_rdms_torch(mu_batch[:,1:]))
+
+                    # print('Stacking calc RDM')
+                    # mu_x_rdm = torch.stack(mu_x_rdm, dim = 0)
+                    # mu_y_rdm = torch.stack(mu_y_rdm, dim = 0)
+
+                    if mu_values.shape[0] != 1:
+                        mu_mean = torch.mean(mu_values, dim = 0)
+                    else:
+                        mu_mean = mu_values[0]
+                        mu_mean = mu_mean.squeeze()
+
+                    # Mapping from mu_xy to source_xy
+                    mu_mean = F.elu(self.linear_xy_1[regressor_i](mu_mean))
+                    mu_mean = F.tanh(F.elu(self.linear_xy_2[regressor_i](mu_mean)))
+                    
+                    ####################################################################################################
+
+                    # # Calculating RDMs with measure as --> ||x2 - x1||^2
+                    # mu_x_rdm = calc_similarity.calc_rdms_torch(mu_mean[:,0:1])
+                    # # Calculating RDMs with measure as --> ||y2 - y1||^2
+                    # mu_y_rdm = calc_similarity.calc_rdms_torch(mu_mean[:,1:])
+                    # # Basically this is like the squared euclidean distance ||x2 - x1||^2 + ||y2 - y1||^2
+                    # mu_xy_rdm = mu_x_rdm + mu_y_rdm
+                    
+                    # # Source RDMs
+                    # # Calculating RDMs with measure as --> ||x2 - x1||^2
+                    # source_x_rdm = calc_similarity.calc_rdms_torch(source_values[:,0:1])
+                    # # Calculating RDMs with measure as --> ||y2 - y1||^2
+                    # source_y_rdm = calc_similarity.calc_rdms_torch(source_values[:,1:])
+                    # # Basically this is like the squared euclidean distance ||x2 - x1||^2 + ||y2 - y1||^2
+                    # source_xy_rdm = source_x_rdm + source_y_rdm
+
+                    # ##################################################
+                    # # Get Corrs
+
+                    # # # spearman_x_func = SpearmanCorrCoef()
+                    # # pearson_x = corr_tensor(calc_similarity.upper_triangle(mu_x_rdm), calc_similarity.upper_triangle(source_x_rdm))
+
+                    # # # spearman_y_func = SpearmanCorrCoef()
+                    # # pearson_y = corr_tensor(calc_similarity.upper_triangle(mu_y_rdm), calc_similarity.upper_triangle(source_y_rdm))
+
+                    # pearson_xy = corr_tensor(calc_similarity.upper_triangle(mu_xy_rdm), calc_similarity.upper_triangle(source_xy_rdm))
+
+                    ####################################################################################################
+                    # Drew's Method
+                    # model_xy = model RF centroids
+                    # mouse_xy = mouse neuron coordinates
+
+                    model_rdm = calc_similarity.pdist_rdm(mu_mean)
+                    mouse_rdm = calc_similarity.pdist_rdm(source_values)
+                    # centroid_loss = calc_similarity.pearson_dist(model_rdm, mouse_rdm)
+
+                    pearson_xy = corr_tensor(model_rdm.ravel(), mouse_rdm.ravel())
 
         # reg_out = F.relu(reg_out)
         reg_out = F.elu(reg_out) + 1
         # reg_out = F.softplus(reg_out)
 
-        return reg_out
+        # print('Going out')
+
+        return reg_out, spearman_x, spearman_y, pearson_xy
     
     #pytorch lighning functions
     def configure_optimizers(self):
@@ -1014,11 +1122,22 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
 
         ########################
         pred_neural_resp = []
+        rdm_corr_x_list = []
+        rdm_corr_y_list = []
+        rdm_corr_xy_list = []
         for i in range(len(images)):
             if self.shifter_bool:
-                pred_neural_resp.append(self(images[i], i, pupil_center = pupil_centers[i]))
+                neural_resp_ind, rdm_corr_x, rdm_corr_y, rdm_corr_xy = self(images[i], i, pupil_center = pupil_centers[i], train_bool = True)
+                pred_neural_resp.append(neural_resp_ind)
+                rdm_corr_x_list.append(rdm_corr_x)
+                rdm_corr_y_list.append(rdm_corr_y)
+                rdm_corr_xy_list.append(rdm_corr_xy)
             else:
-                pred_neural_resp.append(self(images[i], i))
+                neural_resp_ind, rdm_corr_x, rdm_corr_y, rdm_corr_xy = self(images[i], i, train_bool = True)
+                pred_neural_resp.append(neural_resp_ind)
+                rdm_corr_x_list.append(rdm_corr_x)
+                rdm_corr_y_list.append(rdm_corr_y)
+                rdm_corr_xy_list.append(rdm_corr_xy)
 
         ########################
         if not self.corr_loss:
@@ -1048,6 +1167,56 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
 
         ########################
         # self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True)
+
+        # ########################
+        # # For RDM Corr
+        # rdm_corr_x_list = torch.stack(rdm_corr_x_list, dim = 0)
+        # rdm_corr_x_mean = torch.mean(rdm_corr_x_list)
+
+        # rdm_corr_y_list = torch.stack(rdm_corr_y_list, dim = 0)
+        # rdm_corr_y_mean = torch.mean(rdm_corr_y_list)
+
+        # rdm_corr_x_inv_loss = []
+        # rdm_corr_y_inv_loss = []
+        # for rdm_corr_x_ind, rdm_corr_y_ind in zip(rdm_corr_x_list, rdm_corr_y_list):
+        #     rdm_corr_x_inv_loss.append(1/rdm_corr_x_ind)
+        #     rdm_corr_y_inv_loss.append(1/rdm_corr_y_ind)
+
+        # rdm_corr_x_inv_loss = torch.stack(rdm_corr_x_inv_loss, dim = 0)
+        # rdm_corr_y_inv_loss = torch.stack(rdm_corr_y_inv_loss, dim = 0)
+
+        # rdm_corr_x_inv_loss = torch.mean(rdm_corr_x_inv_loss)
+        # rdm_corr_y_inv_loss = torch.mean(rdm_corr_y_inv_loss)
+
+        # ########################
+        # # Adding RDM Loss
+        # loss = loss + 500*(rdm_corr_x_inv_loss + rdm_corr_y_inv_loss)
+
+        ########################
+        # For RDM Corr
+        rdm_corr_xy_list = torch.stack(rdm_corr_xy_list, dim = 0)
+        rdm_corr_xy_mean = torch.mean(rdm_corr_xy_list)
+
+        rdm_corr_xy_inv_loss = []
+        for rdm_corr_xy_ind in rdm_corr_xy_list:
+            rdm_corr_xy_inv_loss.append(1/rdm_corr_xy_ind)
+
+        rdm_corr_xy_inv_loss = torch.stack(rdm_corr_xy_inv_loss, dim = 0)
+
+        rdm_corr_xy_inv_loss = torch.mean(rdm_corr_xy_inv_loss)
+
+        ########################
+        # Adding RDM Loss
+        loss = loss + 500*(rdm_corr_xy_inv_loss)
+
+        ########################
+        # self.log('rdm_corr_x_inv_loss', rdm_corr_x_inv_loss, on_step=True, on_epoch=True, prog_bar=True)
+        # self.log('rdm_corr_y_inv_loss', rdm_corr_y_inv_loss, on_step=True, on_epoch=True, prog_bar=True)
+        # self.log('rdm_corr_x_mean', rdm_corr_x_mean, on_step=True, on_epoch=True, prog_bar=True)
+        # self.log('rdm_corr_y_mean', rdm_corr_y_mean, on_step=True, on_epoch=True, prog_bar=True)
+
+        self.log('rdm_corr_xy_inv_loss', rdm_corr_xy_inv_loss, on_step=True, on_epoch=True, prog_bar=True)
+        self.log('rdm_corr_xy_mean', rdm_corr_xy_mean, on_step=True, on_epoch=True, prog_bar=True)
 
         return loss 
 
@@ -1110,9 +1279,9 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
             #         images = images.squeeze()
         ########################
         if self.shifter_bool:
-            pred_neural_resp = self(images, dataset_idx, pupil_center = pupil_centers)
+            pred_neural_resp, rdm_corr_x, rdm_corr_y, rdm_corr_xy = self(images, dataset_idx, pupil_center = pupil_centers)
         else:
-            pred_neural_resp = self(images, dataset_idx)
+            pred_neural_resp, rdm_corr_x, rdm_corr_y, rdm_corr_xy = self(images, dataset_idx)
 
         ########################
         if self.visualize_bool:
@@ -1160,6 +1329,27 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
 
         ###########################
         # val_loss = torch.sum(val_loss)
+
+        ########################
+        # For RDM Corr
+        # rdm_corr_x_inv_loss = []
+        # rdm_corr_y_inv_loss = []
+        # for rdm_corr_x_ind, rdm_corr_y_ind in zip(rdm_corr_x, rdm_corr_y):
+        #     rdm_corr_x_inv_loss.append(1/rdm_corr_x_ind)
+        #     rdm_corr_y_inv_loss.append(1/rdm_corr_y_ind)
+
+        # rdm_corr_x_inv_loss = torch.stack(rdm_corr_x_inv_loss, dim = 0)
+        # rdm_corr_y_inv_loss = torch.stack(rdm_corr_y_inv_loss, dim = 0)
+
+        # ########################
+        # # Adding RDM Loss
+        # val_loss = val_loss #+ 10000*(rdm_corr_x_inv_loss + rdm_corr_y_inv_loss)
+
+        # ########################
+        # self.log('rdm_corr_x_inv_loss', rdm_corr_x_inv_loss, on_step=True, on_epoch=True, prog_bar=True)
+        # self.log('rdm_corr_y_inv_loss', rdm_corr_y_inv_loss, on_step=True, on_epoch=True, prog_bar=True)
+        # self.log('rdm_corr_x', rdm_corr_x, on_step=True, on_epoch=True, prog_bar=True)
+        # self.log('rdm_corr_y', rdm_corr_y, on_step=True, on_epoch=True, prog_bar=True)
 
         return val_loss
 
@@ -1249,9 +1439,9 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
 
         ########################
         if self.shifter_bool:
-            pred_neural_resp = self(images, dataset_idx, pupil_center = pupil_centers)
+            pred_neural_resp, rdm_corr_x, rdm_corr_y, rdm_corr_xy = self(images, dataset_idx, pupil_center = pupil_centers)
         else:
-            pred_neural_resp = self(images, dataset_idx)
+            pred_neural_resp, rdm_corr_x, rdm_corr_y, rdm_corr_xy = self(images, dataset_idx)
         
         self.akash_test_responses = pred_neural_resp
         ###########################
@@ -1277,6 +1467,27 @@ class InT_Sensorium_Baseline_Pretrain(pl.LightningModule):
 
         ###########################
         # val_loss = torch.mean(val_loss)
+
+        # ########################
+        # # For RDM Corr
+        # rdm_corr_x_inv_loss = []
+        # rdm_corr_y_inv_loss = []
+        # for rdm_corr_x_ind, rdm_corr_y_ind in zip(rdm_corr_x, rdm_corr_y):
+        #     rdm_corr_x_inv_loss.append(1/rdm_corr_x_ind)
+        #     rdm_corr_y_inv_loss.append(1/rdm_corr_y_ind)
+
+        # rdm_corr_x_inv_loss = torch.stack(rdm_corr_x_inv_loss, dim = 0)
+        # rdm_corr_y_inv_loss = torch.stack(rdm_corr_y_inv_loss, dim = 0)
+
+        # ########################
+        # # Adding RDM Loss
+        # # val_loss = val_loss #+ 10000*(rdm_corr_x_inv_loss + rdm_corr_y_inv_loss)
+
+        # ########################
+        # self.log('rdm_corr_x_inv_loss', rdm_corr_x_inv_loss, on_step=True, on_epoch=True, prog_bar=True)
+        # self.log('rdm_corr_y_inv_loss', rdm_corr_y_inv_loss, on_step=True, on_epoch=True, prog_bar=True)
+        # self.log('rdm_corr_x', rdm_corr_x, on_step=True, on_epoch=True, prog_bar=True)
+        # self.log('rdm_corr_y', rdm_corr_y, on_step=True, on_epoch=True, prog_bar=True)
 
         return val_loss
 

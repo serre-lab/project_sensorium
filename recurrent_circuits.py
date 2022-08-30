@@ -376,12 +376,12 @@ class hConvGRUCell(nn.Module):
 
         # Attention gate: filter input_ and excitation
         if self.use_attention:
-            print('Nooooooooooooooooo')
+            # print('Nooooooooooooooooo')
             att_gate = torch.sigmoid(self.a_w_gate(input_) + self.a_u_gate(excitation))  # Attention Spotlight -- MOST RECENT WORKING
 
         # Gate E/I with attention immediately
         if self.use_attention:
-            print('Nooooooooooooooooo')
+            # print('Nooooooooooooooooo')
             gated_input = input_  # * att_gate  # In activ range
             gated_excitation = att_gate * excitation  # att_gate * excitation
         else:
